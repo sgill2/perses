@@ -326,7 +326,16 @@ class PolymerProposalEngine(ProposalEngine):
         """
         # residue_map : list(tuples : simtk.openmm.app.topology.Residue (existing residue), str (three letter residue name of proposed residue))
         # r : simtk.openmm.app.topology.Residue, r.index : int, 0-indexed
-        return [(r, index_to_new_residues[r.index]) for r in topology.residues() if (r.index in index_to_new_residues and r.name != index_to_new_residues[r.index])]
+        residue_map = [(r, index_to_new_residues[r.index]) for r in topology.residues() if (r.index in index_to_new_residues and r.name != index_to_new_residues[r.index])]
+        for k, (residue, new_name) in enumerate(residue_map):
+            chain_residues = list(residue.chain.residues())
+            if residue == chain_residues[0]:
+                new_name = 'N'+new_name
+                residue_map[k] = (residue, new_name)
+            if residue == chain_residues[-1]:
+                new_name = 'C'+new_name
+                residue_map[k] = (residue, new_name)
+        return residue_map
 
     def _find_chain(self, topology):
         chain_found = False
@@ -339,6 +348,21 @@ class PolymerProposalEngine(ProposalEngine):
             chains = [ chain.id for chain in topology.chains() ]
             raise Exception("Chain '%s' not found in Topology. Chains present are: %s" % (chain_id, str(chains)))
         return(chain)
+
+    def _residue_delete_list(self, residue, new_atom_names):
+        delete_residue_atoms = list()
+        for atom in residue.atoms(): # shouldn't remove hydrogen
+            if atom.name not in new_atom_names:
+                delete_residue_atoms.append(atom)
+        return delete_residue_atoms
+
+    def _residue_missing_list(self, template_atoms, old_atom_names):
+        missing = list()
+        # atom : simtk.openmm.app.topology._TemplateAtomData atoms in new residue
+        for atom in template_atoms:
+            if atom.name not in old_atom_names:
+                missing.append(atom)
+        return missing
 
     def _delete_excess_atoms(self, topology, residue_map):
         """
@@ -365,35 +389,17 @@ class PolymerProposalEngine(ProposalEngine):
         # residue : simtk.openmm.app.topology.Residue (existing residue)
         # new_name : str (three letter residue name of proposed residue)
         for k, (residue, new_name) in enumerate(residue_map):
-            # chain_residues : list(simtk.openmm.app.topology.Residue) all residues in chain ==> why
-            chain_residues = list(residue.chain.residues())
-            if residue == chain_residues[0]:
-                new_name = 'N'+new_name
-                residue_map[k] = (residue, new_name)
-            if residue == chain_residues[-1]:
-                new_name = 'C'+new_name
-                residue_map[k] = (residue, new_name)
-            # template : simtk.openmm.app.topology._TemplateData
-            template = self._templates[new_name]
-            # standard_atoms : set of unique atom names within new residue : str
-            standard_atoms = set(atom.name for atom in template.atoms)
-            # template_atoms : list(simtk.openmm.app.topology._TemplateAtomData) atoms in new residue
-            template_atoms = list(template.atoms)
-            # atom_names : set of unique atom names within existing residue : str
-            atom_names = set(atom.name for atom in residue.atoms())
-            # atom : simtk.openmm.app.topology.Atom in existing residue
-            for atom in residue.atoms(): # shouldn't remove hydrogen
-                if atom.name not in standard_atoms:
-                    delete_atoms.append(atom)
+            # template_atoms : list(simtk.openmm.app.topology._TemplateAtomData) --> atoms in template describing NEW residue
+            template_atoms = list(self._templates[new_name].atoms)
+            # new_atom_names : set of unique atom names within new residue : str
+            new_atom_names = set(atom.name for atom in template_atoms)
+            # old_atom_names : set of unique atom names within existing residue : str
+            old_atom_names = set(atom.name for atom in residue.atoms())
+            delete_atoms += self._residue_delete_list(residue, new_atom_names)
 #            if residue == chain_residues[0]: # this doesn't apply?
 #                template_atoms = [atom for atom in template_atoms if atom.name not in ('P', 'OP1', 'OP2')]
             # missing : list(simtk.openmm.app.topology._TemplateAtomData) atoms in new residue not found in existing residue
-            missing = list()
-            # atom : simtk.openmm.app.topology._TemplateAtomData atoms in new residue
-            for atom in template_atoms:
-                if atom.name not in atom_names:
-                    missing.append(atom)
-            # BUG : error if missing = 0?
+            missing = self._residue_missing_list(template_atoms, old_atom_names)
             if len(missing) > 0:
                 missing_atoms[residue] = missing
         # topology : simtk.openmm.app.Topology extra atoms from old residue have been deleted, missing atoms in new residue not yet added
