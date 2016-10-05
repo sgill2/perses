@@ -726,29 +726,41 @@ class PointMutationEngine(PolymerProposalEngine):
         if max_point_mutants is not None and allowed_mutations is not None:
             warnings.warn("PointMutationEngine: max_point_mutants and allowed_mutations were both specified -- max_point_mutants will be ignored")
 
+    def _residue_id_to_index(self, chain):
+        return {residue.id : residue.index for residue in chain._residues}
+
+    def _find_chain(self, topology):
+        chain_found = False
+        for anychain in topology.chains():
+            if anychain.id == self._chain_id:
+                chain = anychain
+                chain_found = True
+                break
+        if not chain_found:
+            chains = [ chain.id for chain in topology.chains() ]
+            raise Exception("Chain '%s' not found in Topology. Chains present are: %s" % (chain_id, str(chains)))
+        return(chain)
+
     def _choose_mutant(self, topology, metadata):
-        chain_id = self._chain_id
+        chain = self._find_chain(topology)
         old_key = self.compute_state_key(topology)
-        index_to_new_residues = self._undo_old_mutants(topology, chain_id, old_key)
+        index_to_new_residues = self._undo_old_mutants(chain, old_key)
         if self._allowed_mutations is not None:
             allowed_mutations = self._allowed_mutations
-            index_to_new_residues = self._choose_mutation_from_allowed(topology, chain_id, allowed_mutations, index_to_new_residues, old_key)
+            index_to_new_residues = self._choose_mutation_from_allowed(chain, allowed_mutations, index_to_new_residues, old_key)
         else:
             # index_to_new_residues : dict, key : int (index) , value : str (three letter residue name)
-            index_to_new_residues = self._propose_mutations(topology, chain_id, index_to_new_residues, old_key)
+            index_to_new_residues = self._propose_mutations(chain, index_to_new_residues, old_key)
         # metadata['mutations'] : list(str (three letter WT residue name - index - three letter MUT residue name) )
         metadata['mutations'] = self._save_mutations(topology, index_to_new_residues)
 
         return index_to_new_residues, metadata
 
-    def _undo_old_mutants(self, topology, chain_id, old_key):
+    def _undo_old_mutants(self, chain, old_key):
         index_to_new_residues = dict()
         if old_key == 'WT':
             return index_to_new_residues
-        for chain in topology.chains():
-            if chain.id == chain_id:
-                break
-        residue_id_to_index = {residue.id : residue.index for residue in chain._residues}
+        residue_id_to_index = self._residue_id_to_index(chain)
         for mutant in old_key.split('-'):
             old_res = mutant[:3]
             residue_id = mutant[3:-3]
@@ -756,18 +768,22 @@ class PointMutationEngine(PolymerProposalEngine):
             index_to_new_residues[residue_id_to_index[residue_id]] = old_res
         return index_to_new_residues
 
-    def _choose_mutation_from_allowed(self, topology, chain_id, allowed_mutations, index_to_new_residues, old_key):
+    def _choose_mutation_from_allowed(self, chain, allowed_mutations, index_to_new_residues, old_key):
         """
         Used when allowed mutations have been specified
         Assume (for now) uniform probability of selecting each specified mutant
 
         Arguments
         ---------
-        topology : simtk.openmm.app.Topology
-        chain_id : str
+        chain : simtk.openmm.app.Chain
         allowed_mutations : list(list(tuple))
             list of allowed mutant states; each entry in the list is a list because multiple mutations may be desired
             tuple : (str, str) -- residue id and three-letter amino acid code of desired mutant
+        index_to_new_residues : dict
+            key : int (index, zero-indexed in chain)
+            value : str (three letter residue name)
+        old_key : str
+            chemical_state_key of old_topology for proposal
 
         Returns
         -------
@@ -775,18 +791,7 @@ class PointMutationEngine(PolymerProposalEngine):
             key : int (index, zero-indexed in chain)
             value : str (three letter residue name)
         """
-
-        # chain : simtk.openmm.app.topology.Chain
-        chain_found = False
-        for anychain in topology.chains():
-            if anychain.id == chain_id:
-                chain = anychain
-                chain_found = True
-                break
-        if not chain_found:
-            chains = [ chain.id for chain in topology.chains() ]
-            raise Exception("Chain '%s' not found in Topology. Chains present are: %s" % (chain_id, str(chains)))
-        residue_id_to_index = {residue.id : residue.index for residue in chain._residues}
+        residue_id_to_index = self._residue_id_to_index(chain)
         # location_prob : np.array, probability value for each residue location (uniform)
         if self._always_change:
             location_prob = np.array([1.0/len(allowed_mutations) for i in range(len(allowed_mutations)+1)])
@@ -827,12 +832,11 @@ class PointMutationEngine(PolymerProposalEngine):
         # index_to_new_residues : dict, key : int (index of residue, 0-indexed), value : str (three letter residue name)
         return index_to_new_residues
 
-    def _propose_mutations(self, topology, chain_id, index_to_new_residues, old_key):
+    def _propose_mutations(self, chain, index_to_new_residues, old_key):
         """
         Arguments
         ---------
-        topology : simtk.openmm.app.Topology
-        chain_id : str
+        chain : simtk.openmm.app.Chain
         index_to_new_residues : dict
             contains information to mutate back to WT as starting point for new mutants
         old_key : str
@@ -847,27 +851,17 @@ class PointMutationEngine(PolymerProposalEngine):
         # this shouldn't be here
         aminos = ['ALA','ARG','ASN','ASP','CYS','GLN','GLU','GLY','HIS','ILE','LEU','LYS','MET','PHE','PRO','SER','THR','TRP','TYR','VAL']
         # chain : simtk.openmm.app.topology.Chain
-        chain_found = False
-        for anychain in topology.chains():
-            if anychain.id == chain_id:
-                chain = anychain
-                if self._residues_allowed_to_mutate is None:
-                    # num_residues : int
-                    num_residues = len(chain._residues)
-                    chain_residues = chain._residues
-                chain_found = True
-                residue_id_to_index = {residue.id : residue.index for residue in chain._residues}
-                break
-        if not chain_found:
-            chains = [ chain.id for chain in topology.chains() ]
-            raise Exception("Chain '%s' not found in Topology. Chains present are: %s" % (chain_id, str(chains)))
-        if self._residues_allowed_to_mutate is not None:
+        residue_id_to_index = self._residue_id_to_index(chain)
+        if self._residues_allowed_to_mutate is None:
+            # num_residues : int
+            num_residues = len(chain._residues)
+            chain_residues = chain._residues
+        else:
             num_residues = len(self._residues_allowed_to_mutate)
             chain_residues = self._mutable_residues(chain)
         # location_prob : np.array, probability value for each residue location (uniform)
         location_prob = np.array([1.0/num_residues for i in range(num_residues)])
         if self._always_change:
-            residue_id_to_index = {residue.id : residue.index for residue in chain._residues}
             current_mutation = dict()
             if old_key != 'WT':
                 for mutant in old_key.split('-'):
@@ -925,15 +919,8 @@ class PointMutationEngine(PolymerProposalEngine):
 
     def compute_state_key(self, topology):
         chemical_state_key = ''
-        wildtype = self._wildtype
-        for anychain in topology.chains():
-            if anychain.id == self._chain_id:
-                chain = anychain
-                break
-        for anywt_chain in wildtype.chains():
-            if anywt_chain.id == self._chain_id:
-                wt_chain = anywt_chain
-                break
+        chain = self._find_chain(topology)
+        wt_chain = self._find_chain(self._wildtype)
         for wt_res, res in zip(wt_chain._residues, chain._residues):
             if wt_res.name != res.name:
                 if chemical_state_key:
