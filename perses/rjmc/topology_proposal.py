@@ -266,15 +266,13 @@ class PolymerProposalEngine(ProposalEngine):
         self._check_agreement(current_system, old_topology)
         old_system = current_system
 
-        # metadata : dict, key = 'chain_id' , value : str
+        # metadata : dict
         metadata = current_metadata
         if metadata is None:
             metadata = dict()
         # old_chemical_state_key : str
         old_chemical_state_key = self.compute_state_key(old_topology)
 
-        # chain_id : str
-        chain_id = self._chain_id
         # save old indices to simplify mapping
         for atom in new_topology.atoms():
             atom.old_index = atom.index
@@ -282,12 +280,7 @@ class PolymerProposalEngine(ProposalEngine):
         index_to_new_residues, metadata = self._choose_mutant(new_topology, metadata)
         # residue_map : list(tuples : simtk.openmm.app.topology.Residue (existing residue), str (three letter residue name of proposed residue))
         residue_map = self._generate_residue_map(new_topology, index_to_new_residues)
-        for (res, new_name) in residue_map:
-            if res.name == new_name:
-                del(index_to_new_residues[res.index])
-        # test if this is necessary -- will entries ever be removed from previous loop
-        residue_map = self._generate_residue_map(new_topology, index_to_new_residues)
-        if len(index_to_new_residues) == 0:
+        if len(residue_map) == 0:
             return self._return_old(old_topology, old_system, old_chemical_state_key)
 
         # new_topology : simtk.openmm.app.Topology extra atoms from old residue have been deleted, missing atoms in new residue not yet added
@@ -333,7 +326,7 @@ class PolymerProposalEngine(ProposalEngine):
         """
         # residue_map : list(tuples : simtk.openmm.app.topology.Residue (existing residue), str (three letter residue name of proposed residue))
         # r : simtk.openmm.app.topology.Residue, r.index : int, 0-indexed
-        return [(r, index_to_new_residues[r.index]) for r in topology.residues() if r.index in index_to_new_residues]
+        return [(r, index_to_new_residues[r.index]) for r in topology.residues() if (r.index in index_to_new_residues and r.name != index_to_new_residues[r.index])]
 
     def _find_chain(self, topology):
         chain_found = False
