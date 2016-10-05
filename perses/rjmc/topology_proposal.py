@@ -340,8 +340,19 @@ class PolymerProposalEngine(ProposalEngine):
         """
         # residue_map : list(tuples : simtk.openmm.app.topology.Residue (existing residue), str (three letter residue name of proposed residue))
         # r : simtk.openmm.app.topology.Residue, r.index : int, 0-indexed
-        residue_map = [(r, index_to_new_residues[r.index]) for r in topology.residues() if r.index in index_to_new_residues]
-        return residue_map
+        return [(r, index_to_new_residues[r.index]) for r in topology.residues() if r.index in index_to_new_residues]
+
+    def _find_chain(self, topology):
+        chain_found = False
+        for anychain in topology.chains():
+            if anychain.id == self._chain_id:
+                chain = anychain
+                chain_found = True
+                break
+        if not chain_found:
+            chains = [ chain.id for chain in topology.chains() ]
+            raise Exception("Chain '%s' not found in Topology. Chains present are: %s" % (chain_id, str(chains)))
+        return(chain)
 
     def _delete_excess_atoms(self, topology, residue_map):
         """
@@ -366,18 +377,18 @@ class PolymerProposalEngine(ProposalEngine):
         # missing_atoms : dict, key : simtk.openmm.app.topology.Residue, value : list(simtk.openmm.app.topology._TemplateAtomData)
         missing_atoms = dict()
         # residue : simtk.openmm.app.topology.Residue (existing residue)
-        # replace_with : str (three letter residue name of proposed residue)
-        for k, (residue, replace_with) in enumerate(residue_map):
+        # new_name : str (three letter residue name of proposed residue)
+        for k, (residue, new_name) in enumerate(residue_map):
             # chain_residues : list(simtk.openmm.app.topology.Residue) all residues in chain ==> why
             chain_residues = list(residue.chain.residues())
             if residue == chain_residues[0]:
-                replace_with = 'N'+replace_with
-                residue_map[k] = (residue, replace_with)
+                new_name = 'N'+new_name
+                residue_map[k] = (residue, new_name)
             if residue == chain_residues[-1]:
-                replace_with = 'C'+replace_with
-                residue_map[k] = (residue, replace_with)
+                new_name = 'C'+new_name
+                residue_map[k] = (residue, new_name)
             # template : simtk.openmm.app.topology._TemplateData
-            template = self._templates[replace_with]
+            template = self._templates[new_name]
             # standard_atoms : set of unique atom names within new residue : str
             standard_atoms = set(atom.name for atom in template.atoms)
             # template_atoms : list(simtk.openmm.app.topology._TemplateAtomData) atoms in new residue
@@ -445,9 +456,9 @@ class PolymerProposalEngine(ProposalEngine):
             extra atoms and bonds from old residue have been deleted, missing atoms in new residue not yet added
         """
 
-        for residue, replace_with in residue_map:
+        for residue, new_name in residue_map:
             # template : simtk.openmm.app.topology._TemplateData
-            template = self._templates[replace_with]
+            template = self._templates[new_name]
 
             old_res_bonds = list()
             # bond : tuple(simtk.openmm.app.topology.Atom, simtk.openmm.app.topology.Atom)
@@ -494,13 +505,13 @@ class PolymerProposalEngine(ProposalEngine):
         for k, residue_ent in enumerate(residue_map):
             # residue : simtk.openmm.app.topology.Residue (old residue) BUG : wasn't this editing the residue in place what is old and new map
             residue = residue_ent[0]
-            # replace_with : str (three letter residue name of new residue)
-            replace_with = residue_ent[1]
+            # new_name : str (three letter residue name of new residue)
+            new_name = residue_ent[1]
             # directly edit the simtk.openmm.app.topology.Residue instance
-            residue.name = replace_with
+            residue.name = new_name
             # load template to compare bonds
             # template : simtk.openmm.app.topology._TemplateData
-            template = self._templates[replace_with]
+            template = self._templates[new_name]
             # add each missing atom
             # atom : simtk.openmm.app.topology._TemplateAtomData
             try:
@@ -660,9 +671,7 @@ class PolymerProposalEngine(ProposalEngine):
 
 
     def compute_state_key(self, topology):
-        for chain in topology.chains():
-            if chain.id == self._chain_id:
-                break
+        chain = self._find_chain(topology)
         chemical_state_key = ''
         for (index, res) in enumerate(chain._residues):
             if (index > 0):
@@ -728,18 +737,6 @@ class PointMutationEngine(PolymerProposalEngine):
 
     def _residue_id_to_index(self, chain):
         return {residue.id : residue.index for residue in chain._residues}
-
-    def _find_chain(self, topology):
-        chain_found = False
-        for anychain in topology.chains():
-            if anychain.id == self._chain_id:
-                chain = anychain
-                chain_found = True
-                break
-        if not chain_found:
-            chains = [ chain.id for chain in topology.chains() ]
-            raise Exception("Chain '%s' not found in Topology. Chains present are: %s" % (chain_id, str(chains)))
-        return(chain)
 
     def _choose_mutant(self, topology, metadata):
         chain = self._find_chain(topology)
@@ -977,15 +974,7 @@ class PeptideLibraryEngine(PolymerProposalEngine):
         index_to_new_residues = dict()
 
         # chain : simtk.openmm.app.topology.Chain
-        chain_id = self._chain_id
-        chain_found = False
-        for chain in topology.chains():
-            if chain.id == chain_id:
-                chain_found = True
-                break
-        if not chain_found:
-            chains = [ chain.id for chain in topology.chains() ]
-            raise Exception("Chain '%s' not found in Topology. Chains present are: %s" % (chain_id, str(chains)))
+        chain = self._find_chain(topology)
         # location_prob : np.array, probability value for each residue location (uniform)
         location_prob = np.array([1.0/len(library) for i in range(len(library))])
         proposed_location = np.random.choice(range(len(library)), p=location_prob)
