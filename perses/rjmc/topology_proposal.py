@@ -212,6 +212,33 @@ class PolymerProposalEngine(ProposalEngine):
         super(PolymerProposalEngine,self).__init__(system_generator, proposal_metadata=proposal_metadata, verbose=verbose, always_change=always_change)
         self._chain_id = chain_id
 
+    def _check_agreement(self, system, topology):
+        topology_natoms = sum([1 for atom in topology.atoms()])
+        system_natoms = system.getNumParticles()
+        if topology_natoms != system_natoms:
+            msg = 'PolymerProposalEngine: topology has %d atoms, while system has %d atoms' % (topology_natoms, system_natoms)
+            raise Exception(msg)
+
+    def _check_atom_map(self, topology_proposal):
+        natoms_old = topology_proposal.old_system.getNumParticles()
+        natoms_new = topology_proposal.new_system.getNumParticles()
+        if not set(topology_proposal.new_to_old_atom_map.values()).issubset(range(natoms_old)):
+            msg = "Some old atoms in TopologyProposal.new_to_old_atom_map are not in span of old atoms (1..%d):\n" % natoms_old
+            msg += str(topology_proposal.new_to_old_atom_map)
+            raise Exception(msg)
+        if not set(topology_proposal.new_to_old_atom_map.keys()).issubset(range(natoms_new)):
+            msg = "Some new atoms in TopologyProposal.new_to_old_atom_map are not in span of old atoms (1..%d):\n" % natoms_new
+            msg += str(topology_proposal.new_to_old_atom_map)
+            raise Exception(msg)
+
+    def _return_old(self, topology, system, state_key):
+        atom_map = dict()
+        for atom in topology.atoms():
+            atom_map[atom.index] = atom.index
+        if self.verbose: print('PolymerProposalEngine: No changes to topology proposed, returning old system and topology')
+        topology_proposal = TopologyProposal(new_topology=topology, new_system=system, old_topology=topology, old_system=system, old_chemical_state_key=state_key, new_chemical_state_key=state_key, logp_proposal=0.0, new_to_old_atom_map=atom_map)
+        return topology_proposal
+
     def propose(self, current_system, current_topology, current_metadata=None):
         """
 
@@ -236,28 +263,20 @@ class PolymerProposalEngine(ProposalEngine):
         new_topology = copy.deepcopy(current_topology)
 
         # Check that old_topology and old_system have same number of atoms.
+        self._check_agreement(current_system, old_topology)
         old_system = current_system
-        old_topology_natoms = sum([1 for atom in old_topology.atoms()]) # number of topology atoms
-        old_system_natoms = old_system.getNumParticles()
-        if old_topology_natoms != old_system_natoms:
-            msg = 'PolymerProposalEngine: old_topology has %d atoms, while old_system has %d atoms' % (old_topology_natoms, old_system_natoms)
-            raise Exception(msg)
 
         # metadata : dict, key = 'chain_id' , value : str
         metadata = current_metadata
-        if metadata == None:
+        if metadata is None:
             metadata = dict()
         # old_chemical_state_key : str
         old_chemical_state_key = self.compute_state_key(old_topology)
 
         # chain_id : str
         chain_id = self._chain_id
-        # save old indices for mapping -- could just directly save positions instead
-
-        # EDITING new_topology
-        # atom : simtk.openmm.app.topology.Atom
+        # save old indices to simplify mapping
         for atom in new_topology.atoms():
-            # atom.old_index : int
             atom.old_index = atom.index
 
         index_to_new_residues, metadata = self._choose_mutant(new_topology, metadata)
@@ -266,14 +285,10 @@ class PolymerProposalEngine(ProposalEngine):
         for (res, new_name) in residue_map:
             if res.name == new_name:
                 del(index_to_new_residues[res.index])
+        # test if this is necessary -- will entries ever be removed from previous loop
+        residue_map = self._generate_residue_map(new_topology, index_to_new_residues)
         if len(index_to_new_residues) == 0:
-            atom_map = dict()
-            for atom in new_topology.atoms():
-                atom_map[atom.index] = atom.index
-            if self.verbose: print('PolymerProposalEngine: No changes to topology proposed, returning old system and topology')
-            topology_proposal = TopologyProposal(new_topology=old_topology, new_system=old_system, old_topology=old_topology, old_system=old_system, old_chemical_state_key=old_chemical_state_key, new_chemical_state_key=old_chemical_state_key, logp_proposal=0.0, new_to_old_atom_map=atom_map)
-            return topology_proposal
-
+            return self._return_old(old_topology, old_system, old_chemical_state_key)
 
         # new_topology : simtk.openmm.app.Topology extra atoms from old residue have been deleted, missing atoms in new residue not yet added
         # missing_atoms : dict, key : simtk.openmm.app.topology.Residue, value : list(simtk.openmm.app.topology._TemplateAtomData)
@@ -291,31 +306,9 @@ class PolymerProposalEngine(ProposalEngine):
         # Create TopologyProposal.
         topology_proposal = TopologyProposal(new_topology=new_topology, new_system=new_system, old_topology=old_topology, old_system=old_system, old_chemical_state_key=old_chemical_state_key, new_chemical_state_key=new_chemical_state_key, logp_proposal=0.0, new_to_old_atom_map=atom_map)
 
-        # Check that old_topology and old_system have same number of atoms.
-#        old_system = current_system
-        old_topology_natoms = sum([1 for atom in old_topology.atoms()]) # number of topology atoms
-        old_system_natoms = old_system.getNumParticles()
-        if old_topology_natoms != old_system_natoms:
-            msg = 'PolymerProposalEngine: old_topology has %d atoms, while old_system has %d atoms' % (old_topology_natoms, old_system_natoms)
-            raise Exception(msg)
-
-        # Check that new_topology and new_system have same number of atoms.
-        new_topology_natoms = sum([1 for atom in new_topology.atoms()]) # number of topology atoms
-        new_system_natoms = new_system.getNumParticles()
-        if new_topology_natoms != new_system_natoms:
-            msg = 'PolymerProposalEngine: new_topology has %d atoms, while new_system has %d atoms' % (new_topology_natoms, new_system_natoms)
-            raise Exception(msg)
-                    # Check to make sure no out-of-bounds atoms are present in new_to_old_atom_map
-        natoms_old = topology_proposal.old_system.getNumParticles()
-        natoms_new = topology_proposal.new_system.getNumParticles()
-        if not set(topology_proposal.new_to_old_atom_map.values()).issubset(range(natoms_old)):
-            msg = "Some old atoms in TopologyProposal.new_to_old_atom_map are not in span of old atoms (1..%d):\n" % natoms_old
-            msg += str(topology_proposal.new_to_old_atom_map)
-            raise Exception(msg)
-        if not set(topology_proposal.new_to_old_atom_map.keys()).issubset(range(natoms_new)):
-            msg = "Some new atoms in TopologyProposal.new_to_old_atom_map are not in span of old atoms (1..%d):\n" % natoms_new
-            msg += str(topology_proposal.new_to_old_atom_map)
-            raise Exception(msg)
+        self._check_agreement(old_system, old_topology)
+        self._check_agreement(new_system, new_topology)
+        self._check_atom_map(topology_proposal)
 
         return topology_proposal
 
