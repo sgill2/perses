@@ -914,7 +914,7 @@ class PointMutationEngine(PolymerProposalEngine):
             if wt_res.name != res.name:
                 if chemical_state_key:
                     chemical_state_key+='-'
-                chemical_state_key+= str(wt_res.name)+str(res.id)+str(res.name)
+                chemical_state_key+= str(wt_res.name[-3:])+str(res.id)+str(res.name[-3:])
         if not chemical_state_key:
             chemical_state_key = 'WT'
         return chemical_state_key
