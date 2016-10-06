@@ -735,8 +735,7 @@ class PointMutationEngine(PolymerProposalEngine):
         old_key = self.compute_state_key(topology)
         index_to_new_residues = self._undo_old_mutants(chain, old_key)
         if self._allowed_mutations is not None:
-            allowed_mutations = self._allowed_mutations
-            index_to_new_residues = self._choose_mutation_from_allowed(chain, allowed_mutations, index_to_new_residues, old_key)
+            index_to_new_residues = self._choose_mutation_from_allowed(chain, index_to_new_residues, old_key)
         else:
             # index_to_new_residues : dict, key : int (index) , value : str (three letter residue name)
             index_to_new_residues = self._propose_mutations(chain, index_to_new_residues, old_key)
@@ -757,7 +756,46 @@ class PointMutationEngine(PolymerProposalEngine):
             index_to_new_residues[residue_id_to_index[residue_id]] = old_res
         return index_to_new_residues
 
-    def _choose_mutation_from_allowed(self, chain, allowed_mutations, index_to_new_residues, old_key):
+    def _location_prob_array(self, length, set_zero=None):
+        """
+        Arguments
+        ---------
+        length : int
+            number of location options
+        set_zero : int, optional (default None)
+            index of location in array that should have probability 0.0
+            set_zero must be specified with always_change
+            relates to probability of choosing previous state
+        """
+        if self._always_change:
+            location_prob = np.array([1.0/(length-1) for i in range(length)])
+            if set_zero is not None:
+                location_prob[set_zero] = 0.0
+            else:
+                raise(Exception("_location_prob_array: MISSING set_zero -- if always_change, must specify location of previous mutant"))
+        else:
+            location_prob = np.array([1.0/length for i in range(length)])
+        return location_prob
+
+    def _find_zero_allowed_location(self, old_key, allowed_mutations):
+        if not self._always_change:
+            return None
+        if old_key == 'WT':
+            set_zero = len(allowed_mutations)
+        else:
+            current_mutation = list()
+            for mutant in old_key.split('-'):
+                residue_id = mutant[3:-3]
+                new_res = mutant[-3:]
+                current_mutation.append((residue_id,new_res))
+            current_mutation.sort()
+            set_zero = allowed_mutations.index(current_mutation)
+        return set_zero
+
+    def _choose_location(self, length, location_prob):
+        return np.random.choice(range(length), p=location_prob)
+
+    def _choose_mutation_from_allowed(self, chain, index_to_new_residues, old_key):
         """
         Used when allowed mutations have been specified
         Assume (for now) uniform probability of selecting each specified mutant
@@ -780,23 +818,12 @@ class PointMutationEngine(PolymerProposalEngine):
             key : int (index, zero-indexed in chain)
             value : str (three letter residue name)
         """
+        allowed_mutations = self._allowed_mutations
         residue_id_to_index = self._residue_id_to_index(chain)
         # location_prob : np.array, probability value for each residue location (uniform)
-        if self._always_change:
-            location_prob = np.array([1.0/len(allowed_mutations) for i in range(len(allowed_mutations)+1)])
-            if old_key == 'WT':
-                location_prob[len(allowed_mutations)] = 0.0
-            else:
-                current_mutation = list()
-                for mutant in old_key.split('-'):
-                    residue_id = mutant[3:-3]
-                    new_res = mutant[-3:]
-                    current_mutation.append((residue_id,new_res))
-                current_mutation.sort()
-                location_prob[allowed_mutations.index(current_mutation)] = 0.0
-        else:
-            location_prob = np.array([1.0/(len(allowed_mutations)+1.0) for i in range(len(allowed_mutations)+1)])
-        proposed_location = np.random.choice(range(len(allowed_mutations)+1), p=location_prob)
+        set_zero = self._find_zero_allowed_location(old_key, allowed_mutations)
+        location_prob = self._location_prob_array(len(allowed_mutations)+1, set_zero)
+        proposed_location = self._choose_location(len(allowed_mutations)+1, location_prob)
         if proposed_location == len(allowed_mutations):
             # choose WT
             pass
