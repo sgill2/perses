@@ -795,6 +795,50 @@ class PointMutationEngine(PolymerProposalEngine):
     def _choose_location(self, length, location_prob):
         return np.random.choice(range(length), p=location_prob)
 
+    def _add_new_allowed_mutants_to_dict(self, index_to_new_residues, allowed_mutations, proposed_location, chain):
+        """
+        Update index_to_new_residues with newly chosen mutations
+        Arguments
+        ---------
+        index_to_new_residues : dict
+            key : int (index, zero-indexed in chain)
+            value : str (three letter residue name)
+            residues to change back to WT from previous state
+        allowed_mutations : list(list(tuple)
+            list of allowed mutant states; each entry in the list is a list because multiple mutations may be desired
+            tuple : (str, str) -- residue id and three-letter amino acid code of desired mutant
+        proposed_location : int
+            index within allowed_mutations list chosen for new chemical state
+        chain : simtk.openmm.app.Chain
+        Returns
+        -------
+        index_to_new_residues : dict
+            key : int (index, zero-indexed in chain)
+            value : str (three letter residue name)
+            residues to change back to WT from previous state and 
+            residues to change to new mutation
+        """
+        if proposed_location == len(allowed_mutations):
+            return index_to_new_residues
+        else:
+            for residue_id, residue_name in allowed_mutations[proposed_location]:
+                original_residue = chain._residues[residue_id_to_index[residue_id]]
+                if original_residue.name in ['HID','HIE']:
+                    original_residue.name = 'HIS'
+                if original_residue.name == residue_name:
+                    continue
+                if residue_name == 'HIS':
+                    residue_name = self._choose_his_protonation_state()
+                index_to_new_residues[residue_id_to_index[residue_id]] = residue_name
+                if self.verbose: print('Proposed mutation: %s %s %s' % (original_residue.name, residue_id, residue_name))
+        return index_to_new_residues
+
+    def _choose_his_protonation_state(self):
+        his_state = ['HIE','HID']
+        his_prob = np.array([0.5 for i in range(len(his_state))])
+        his_choice = np.random.choice(range(len(his_state)),p=his_prob)
+        return his_state[his_choice]
+
     def _choose_mutation_from_allowed(self, chain, index_to_new_residues, old_key):
         """
         Used when allowed mutations have been specified
@@ -824,28 +868,10 @@ class PointMutationEngine(PolymerProposalEngine):
         set_zero = self._find_zero_allowed_location(old_key, allowed_mutations)
         location_prob = self._location_prob_array(len(allowed_mutations)+1, set_zero)
         proposed_location = self._choose_location(len(allowed_mutations)+1, location_prob)
-        if proposed_location == len(allowed_mutations):
-            # choose WT
-            pass
-        else:
-            for residue_id, residue_name in allowed_mutations[proposed_location]:
-                # original_residue : simtk.openmm.app.topology.Residue
-                original_residue = chain._residues[residue_id_to_index[residue_id]]
-                if original_residue.name in ['HID','HIE']:
-                    original_residue.name = 'HIS'
-                if original_residue.name == residue_name:
-                    continue
-                # index_to_new_residues : dict, key : int (index of residue, 0-indexed), value : str (three letter residue name)
-                index_to_new_residues[residue_id_to_index[residue_id]] = residue_name
-                if residue_name == 'HIS':
-                    his_state = ['HIE','HID']
-                    his_prob = np.array([0.5 for i in range(len(his_state))])
-                    his_choice = np.random.choice(range(len(his_state)),p=his_prob)
-                    index_to_new_residues[residue_id_to_index[residue_id]] = his_state[his_choice]
-                # DEBUG
-                if self.verbose: print('Proposed mutation: %s %s %s' % (original_residue.name, residue_id, residue_name))
 
+        index_to_new_residues = self._add_new_allowed_mutants_to_dict(index_to_new_residues, allowed_mutations, proposed_location, chain)
         # index_to_new_residues : dict, key : int (index of residue, 0-indexed), value : str (three letter residue name)
+
         return index_to_new_residues
 
     def _propose_mutations(self, chain, index_to_new_residues, old_key):
