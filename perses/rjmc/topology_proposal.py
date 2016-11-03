@@ -931,10 +931,7 @@ class PointMutationEngine(PolymerProposalEngine):
                 proposed_location = residue_id_to_index[self._residues_allowed_to_mutate[proposed_location]]
             index_to_new_residues[proposed_location] = aminos[proposed_amino_index]
             if aminos[proposed_amino_index] == 'HIS':
-                his_state = ['HIE','HID']
-                his_prob = np.array([0.5 for j in range(len(his_state))])
-                his_choice = np.random.choice(range(len(his_state)),p=his_prob)
-                index_to_new_residues[proposed_location] = his_state[his_choice]
+                index_to_new_residues[proposed_location] = self._choose_his_protonation_state()
         return index_to_new_residues
 
     def _mutable_residues(self, chain):
