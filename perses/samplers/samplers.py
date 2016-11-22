@@ -968,6 +968,7 @@ class ExpandedEnsembleSampler(object):
         if self.storage:
             self.storage.write_quantity('logp_ncmc_elimination', ncmc_elimination_logp, iteration=self.iteration)
             self.storage.write_quantity('logp_ncmc_introduction', ncmc_introduction_logp, iteration=self.iteration)
+            self.storage.write_quantity('logp_ncmc', ncmc_elimination_logp + ncmc_introduction_logp, iteration=self.iteration)
             self.storage.write_quantity('update_state_elapsed_time', elapsed_time, iteration=self.iteration)
             self.storage.write_quantity('logp_switch', switch_logp, iteration=self.iteration)
             self.storage.write_quantity('logp_geometry', geometry_logp, iteration=self.iteration)
@@ -1007,6 +1008,7 @@ class ExpandedEnsembleSampler(object):
         # Write to storage.
         if self.storage:
             self.storage.write_quantity('logp_ncmc_introduction', ncmc_introduction_logp, iteration=self.iteration)
+            self.storage.write_quantity('logp_ncmc', ncmc_introduction_logp, iteration=self.iteration)
             self.storage.write_quantity('update_state_elapsed_time', elapsed_time, iteration=self.iteration)
             self.storage.write_quantity('logp_switch', switch_logp, iteration=self.iteration)
             self.storage.write_quantity('logp_geometry', geometry_logp, iteration=self.iteration)
