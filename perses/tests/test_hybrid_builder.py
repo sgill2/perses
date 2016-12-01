@@ -3,6 +3,7 @@ from simtk import unit, openmm
 import numpy as np
 from perses.annihilation.relative import HybridTopologyFactory
 import copy
+import os
 
 ace = {
     'H1'  : [app.Element.getBySymbol('H'), (2.022 ,  0.992 ,  0.038)],#  1.00  0.00           H
@@ -242,6 +243,7 @@ def compute_alchemical_correction(unmodified_old_system, unmodified_new_system, 
         print('Alchemical Correction:')
         print(logP_alchemical_correction)
 
+@skipIf(os.environ.get("TRAVIS", None) == 'true', "Skip expensive test on travis")
 def test_setup_hybrid_system():
     alanine_topology, alanine_positions, leucine_topology, leucine_positions, atom_map = build_two_residues()
 
@@ -254,6 +256,7 @@ def test_setup_hybrid_system():
 
     compute_alchemical_correction(leucine_system, alanine_system, system, leucine_positions, positions, positions, alanine_positions)
 
+@skipIf(os.environ.get("TRAVIS", None) == 'true', "Skip expensive test on travis")
 def test_null_hybrid_system():
     from perses.tests.testsystems import NaphthaleneTestSystem
     testsystem = NaphthaleneTestSystem()
