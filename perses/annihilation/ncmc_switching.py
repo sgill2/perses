@@ -587,7 +587,7 @@ class NCMCHybridEngine(NCMCEngine):
                  nsteps=default_nsteps, timestep=default_timestep,
                  constraint_tolerance=None, platform=None,
                  write_ncmc_interval=None, integrator_type='GHMC',
-                 storage=None, softening=1.0):
+                 storage=None, softening=0.1):
         """
         Subclass of NCMCEngine which switches directly between two different
         systems using an alchemical hybrid topology.
