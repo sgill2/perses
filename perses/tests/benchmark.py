@@ -172,6 +172,7 @@ def benchmark_ncmc_work_during_protocol():
                 testsystem.exen_samplers[ENV].run(niterations=niterations)
 
                 analysis = Analysis(testsystem.storage_filename)
+                print(analysis.get_environments())
                 if ncmc_nsteps > 99:
                     analysis.plot_ncmc_work('{0}_{1}-ncmc_work_over_{2}_steps.pdf'.format(molecule_name, name, ncmc_nsteps))
                 analysis.plot_exen_logp_components()
@@ -181,4 +182,3 @@ def benchmark_ncmc_work_during_protocol():
 
 if __name__ == "__main__":
     benchmark_ncmc_work_during_protocol()
-

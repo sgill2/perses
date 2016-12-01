@@ -350,10 +350,6 @@ class NCMCEngine(object):
         final_positions = context.getState(getPositions=True).getPositions(asNumpy=True)
         assert quantity_is_finite(final_positions) == True
         logP_NCMC = integrator.getLogAcceptanceProbability(context)
-        ## remove
-        with open('{0}-iteration{1}-{2}.pdb'.format(self._storage._filename.split('.')[0], iteration, direction), 'w') as fo:
-            PDBFile.writeFile(topology, final_positions, fo)
-        ##
         return final_positions, logP_NCMC
 
     def _zero_steps_return(self, initial_positions, system):
