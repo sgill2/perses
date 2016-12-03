@@ -724,7 +724,10 @@ class ExpandedEnsembleSampler(object):
         Cumulative counts of visited states.
     verbose : bool
         If True, verbose output is printed.
-
+    initial_log_weight_guess : str, default=None
+        If 'logP', will accept each transition the first time it is proposed, initializing log weight based on logP for first proposal.
+        This may be a good choice for small ligand spaces.
+        
     References
     ----------
     [1] Lyubartsev AP, Martsinovski AA, Shevkunov SV, and Vorontsov-Velyaminov PN. New approach to Monte Carlo calculation of the free energy: Method of expanded ensembles. JCP 96:1776, 1992
@@ -832,6 +835,7 @@ class ExpandedEnsembleSampler(object):
         self.geometry_pdbfile = None # if not None, write PDB file of geometry proposals
         self.accept_everything = False # if True, will accept anything that doesn't lead to NaNs
         self.logPs = list()
+        self.initial_log_weight_guess = None # if 'logP', use first logP to estimate initial weights; will accept each transition the first time it is proposed
 
     @property
     def state_keys(self):
@@ -1006,7 +1010,7 @@ class ExpandedEnsembleSampler(object):
             raise Exception("Positions are NaN after NCMC insert with %d steps" % self._switching_nsteps)
         return ncmc_new_positions, ncmc_old_positions, ncmc_logp
 
-    def _geometry_ncmc_geometry(self, topology_proposal, positions, old_log_weight, new_log_weight):
+    def _geometry_ncmc_geometry(self, topology_proposal, positions, old_state_key, new_state_key):
         """
         Use a hybrid NCMC protocol to switch from the old system to new system
         Will calculate new positions for the new system first, then give both
@@ -1020,10 +1024,10 @@ class ExpandedEnsembleSampler(object):
             Contains old/new Topology and System objects and atom mappings.
         positions : simtk.unit.Quantity with dimension [natoms, 3] with units of distance.
             Positions of old atoms at the beginning of the NCMC switching.
-        old_log_weight : float
-            Chemical state weight from SAMSSampler
-        new_log_weight : float
-            Chemical state weight from SAMSSampler
+        old_state_key : hashable object
+            State key for previous sampled state
+        new_state_key : hashable object
+            State key for proposed state           
 
         Returns
         -------
@@ -1042,6 +1046,12 @@ class ExpandedEnsembleSampler(object):
         geometry_logp_reverse = self._geometry_reverse(topology_proposal, ncmc_new_positions, ncmc_old_positions)
         geometry_logp = geometry_logp_reverse - geometry_logp_propose
 
+        # Determine log weights
+        old_log_weight = self.get_log_weight(old_state_key)
+        if (new_state_key not in self.log_weights) and (self.initial_log_weight_guess == 'logP'):
+            self.log_weights[new_state_key] = old_log_weight - (topology_proposal.logp_proposal + geometry_logp + ncmc_logp)
+        new_log_weight = self.get_log_weight(new_state_key)
+
         # Compute total log acceptance probability, including all components.
         logp_accept = topology_proposal.logp_proposal + geometry_logp + ncmc_logp + new_log_weight - old_log_weight
         if self.verbose:
@@ -1058,7 +1068,7 @@ class ExpandedEnsembleSampler(object):
 
         return logp_accept, ncmc_new_positions
 
-    def _ncmc_geometry_ncmc(self, topology_proposal, positions, old_log_weight, new_log_weight):
+    def _ncmc_geometry_ncmc(self, topology_proposal, positions, old_state_key, new_state_key):
         """
         Use separate NCMC protocols for deletion and insertion of unique atoms
         from the old system and new system
@@ -1072,10 +1082,10 @@ class ExpandedEnsembleSampler(object):
             Contains old/new Topology and System objects and atom mappings.
         positions : simtk.unit.Quantity with dimension [natoms, 3] with units of distance.
             Positions of old atoms at the beginning of the NCMC switching.
-        old_log_weight : float
-            Chemical state weight from SAMSSampler
-        new_log_weight : float
-            Chemical state weight from SAMSSampler
+        old_state_key : hashable object
+            State key for previous sampled state
+        new_state_key : hashable object
+            State key for proposed state           
 
         Returns
         -------
@@ -1100,6 +1110,12 @@ class ExpandedEnsembleSampler(object):
         # Compute change in eliminated potential contribution.
         switch_logp = - (potential_insert - potential_delete)
 
+        # Determine log weights
+        old_log_weight = self.get_log_weight(old_state_key)
+        if (new_state_key not in self.log_weights) and (self.initial_log_weight_guess == 'logP'):
+            self.log_weights[new_state_key] = old_log_weight - (topology_proposal.logp_proposal + geometry_logp + switch_logp + ncmc_elimination_logp + ncmc_introduction_logp)
+        new_log_weight = self.get_log_weight(new_state_key)
+
         # Compute total log acceptance probability, including all components.
         logp_accept = topology_proposal.logp_proposal + geometry_logp + switch_logp + ncmc_elimination_logp + ncmc_introduction_logp + new_log_weight - old_log_weight
         if self.verbose:
@@ -1123,7 +1139,7 @@ class ExpandedEnsembleSampler(object):
 
         return logp_accept, ncmc_new_positions
 
-    def _geometry_ncmc(self, topology_proposal, positions, old_log_weight, new_log_weight):
+    def _geometry_ncmc(self, topology_proposal, positions, old_state_key, new_state_key):
         """
         NOT IMPLEMENTED
 
@@ -1143,6 +1159,10 @@ class ExpandedEnsembleSampler(object):
             Chemical state weight from SAMSSampler
         new_log_weight : float
             Chemical state weight from SAMSSampler
+        old_state_key : hashable object
+            State key for previous sampled state
+        new_state_key : hashable object
+            State key for proposed state           
 
         Returns
         -------
@@ -1168,6 +1188,12 @@ class ExpandedEnsembleSampler(object):
 
         # Compute change in eliminated potential contribution.
         switch_logp = - (potential_insert - potential_delete)
+
+        # Determine log weights
+        old_log_weight = self.get_log_weight(old_state_key)
+        if (new_state_key not in self.log_weights) and (self.initial_log_weight_guess == 'logP'):
+            self.log_weights[new_state_key] = old_log_weight - (topology_proposal.logp_proposal + geometry_logp + switch_logp + ncmc_introduction_logp)
+        new_log_weight = self.get_log_weight(new_state_key)
 
         # Compute total log acceptance probability, including all components.
         logp_accept = topology_proposal.logp_proposal + geometry_logp + switch_logp + ncmc_introduction_logp + new_log_weight - old_log_weight
@@ -1213,16 +1239,12 @@ class ExpandedEnsembleSampler(object):
         old_state_key = self.state_key
         new_state_key = topology_proposal.new_chemical_state_key
 
-        # Determine log weight
-        old_log_weight = self.get_log_weight(old_state_key)
-        new_log_weight = self.get_log_weight(new_state_key)
-
         if self.scheme == 'ncmc-geometry-ncmc':
-            logp_accept, ncmc_new_positions = self._ncmc_geometry_ncmc(topology_proposal, positions, old_log_weight, new_log_weight)
+            logp_accept, ncmc_new_positions = self._ncmc_geometry_ncmc(topology_proposal, positions, old_state_key, new_state_key)
         elif self.scheme == 'geometry-ncmc':
-            logp_accept, ncmc_new_positions = self._geometry_ncmc(topology_proposal, positions, old_log_weight, new_log_weight)
+            logp_accept, ncmc_new_positions = self._geometry_ncmc(topology_proposal, positions, old_state_key, new_state_key)
         elif self.scheme == 'geometry-ncmc-geometry':
-            logp_accept, ncmc_new_positions = self._geometry_ncmc_geometry(topology_proposal, positions, old_log_weight, new_log_weight)
+            logp_accept, ncmc_new_positions = self._geometry_ncmc_geometry(topology_proposal, positions, old_state_key, new_state_key)
         else:
             raise Exception("Expanded ensemble state proposal scheme '%s' unsupported" % self.scheme)
 

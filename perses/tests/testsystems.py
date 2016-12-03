@@ -38,6 +38,7 @@ from perses.storage import NetCDFStorage, NetCDFStorageView
 from perses.rjmc.geometry import FFAllAngleGeometryEngine
 import tempfile
 import copy
+import perses
 
 ################################################################################
 # CONSTANTS
@@ -1254,6 +1255,7 @@ class AblImatinibProtonationStateTestSystem(PersesTestSystem):
 
         # Expand molecules without explicit stereochemistry and make canonical isomeric SMILES.
         molecules = sanitizeSMILES(self.molecules)
+        molecules = canonicalize_SMILES(molecules)
 
         # Create a system generator for desired forcefields
         # TODO: Debug why we can't ue pregenerated molecule ffxml parameters. This may be an openmoltools issue.
@@ -1468,6 +1470,7 @@ class ImidazoleProtonationStateTestSystem(PersesTestSystem):
 
         # Expand molecules without explicit stereochemistry and make canonical isomeric SMILES.
         molecules = sanitizeSMILES(self.molecules)
+        molecules = canonicalize_SMILES(molecules)
 
         # Create a system generator for desired forcefields
         print('Creating system generators...')
@@ -2567,7 +2570,7 @@ def run_constph_abl():
         #testsystem.exen_samplers[environment].ncmc_engine.write_ncmc_interval = 100 # write PDB files for NCMC switching
         testsystem.mcmc_samplers[environment].nsteps = 10000
         testsystem.mcmc_samplers[environment].timestep = 1.0 * unit.femtoseconds
-
+        testsystem.exen_samplers[environment].initial_log_weight_guess = 'logP' # accept each transition the first time it is proposed, using logP to estimate initial log weight
         testsystem.mcmc_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].proposal_engine.verbose = True
@@ -2601,14 +2604,17 @@ def run_imidazole():
         #testsystem.exen_samplers[environment].ncmc_engine.write_ncmc_interval = 100 # write PDB files for NCMC switching
         testsystem.mcmc_samplers[environment].nsteps = 500
         testsystem.mcmc_samplers[environment].timestep = 1.0 * unit.femtoseconds
-
+        testsystem.exen_samplers[environment].initial_log_weight_guess = 'logP' # accept each transition the first time it is proposed, using logP to estimate initial log weight
         testsystem.mcmc_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].proposal_engine.verbose = True
         testsystem.sams_samplers[environment].verbose = True
 
+    environment = 'vacuum-imidazole'
+    testsystem.mcmc_samplers[environment].run(niterations=10)
+    testsystem.sams_samplers[environment].run(niterations=500)
+
     # Run ligand in solvent constant-pH sampler calibration
-    testsystem.sams_samplers['explicit-imidazole'].verbose=True
     testsystem.sams_samplers['explicit-imidazole'].run(niterations=500)
 
 def run_fused_rings():
@@ -2645,8 +2651,8 @@ if __name__ == '__main__':
     #run_fused_rings()
     #run_valence_system()
     #run_t4_inhibitors()
-    #run_imidazole()
-    run_constph_abl()
+    run_imidazole()
+    #run_constph_abl()
     #run_abl_affinity_write_pdb_ncmc_switching()
     #run_kinase_inhibitors()
     #run_abl_imatinib()
