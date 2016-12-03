@@ -1262,16 +1262,16 @@ class AblImatinibProtonationStateTestSystem(PersesTestSystem):
         print('Creating system generators...')
         from perses.rjmc.topology_proposal import SystemGenerator
         gaff_xml_filename = resource_filename('perses', 'data/gaff.xml')
-        barostat = MonteCarloBarostat(pressure, temperature)
+        barostat = openmm.MonteCarloBarostat(pressure, temperature)
         system_generators = dict()
         system_generators['explicit'] = SystemGenerator([gaff_xml_filename, 'amber99sbildn.xml', 'tip3p.xml'],
-            forcefield_kwargs={ 'nonbondedMethod' : app.CutoffPeriodic, 'nonbondedCutoff' : 9.0 * unit.angstrom, 'implicitSolvent' : None, 'constraints' : None },
+            forcefield_kwargs={ 'nonbondedMethod' : app.PME, 'nonbondedCutoff' : 12.0 * unit.angstrom, 'constraints' : app.HBonds, 'ewaldErrorTolerance' : 1.0e-4, 'useDispersionCorrection' : True },
             use_antechamber=True, barostat=barostat)
         system_generators['implicit'] = SystemGenerator([gaff_xml_filename, 'amber99sbildn.xml', 'amber99_obc.xml'],
-            forcefield_kwargs={ 'nonbondedMethod' : app.NoCutoff, 'implicitSolvent' : app.OBC2, 'constraints' : None },
+            forcefield_kwargs={ 'nonbondedMethod' : app.NoCutoff, 'implicitSolvent' : app.OBC2, 'constraints' : app.HBonds },
             use_antechamber=True)
         system_generators['vacuum'] = SystemGenerator([gaff_xml_filename, 'amber99sbildn.xml'],
-            forcefield_kwargs={ 'nonbondedMethod' : app.NoCutoff, 'implicitSolvent' : None, 'constraints' : None },
+            forcefield_kwargs={ 'nonbondedMethod' : app.NoCutoff, 'implicitSolvent' : None, 'constraints' : app.HBonds },
             use_antechamber=True)
         # Copy system generators for all environments
         for solvent in solvents:
@@ -2549,10 +2549,8 @@ def run_constph_abl():
     """
     Run Abl:imatinib constant-pH test system.
     """
-    testsystem = AblImatinibProtonationStateTestSystem()
+    testsystem = AblImatinibProtonationStateTestSystem(storage_filename='output.nc')
     for environment in testsystem.environments:
-    #for environment in ['explicit-inhibitor', 'explicit-complex']:
-    #for environment in ['vacuum-inhibitor', 'vacuum-complex']:
         if environment not in testsystem.exen_samplers:
             print("Skipping '%s' for now..." % environment)
             continue
@@ -2560,34 +2558,26 @@ def run_constph_abl():
         print(environment)
         testsystem.exen_samplers[environment].pdbfile = open('abl-imatinib-constph-%s.pdb' % environment, 'w')
         testsystem.exen_samplers[environment].geometry_pdbfile = open('abl-imatinib-constph-%s-geometry-proposals.pdb' % environment, 'w')
-        testsystem.exen_samplers[environment].ncmc_engine.nsteps = 50
+        testsystem.exen_samplers[environment].ncmc_engine.nsteps = 10000
         testsystem.exen_samplers[environment].ncmc_engine.timestep = 1.0 * unit.femtoseconds
         testsystem.exen_samplers[environment].accept_everything = False # accept everything that doesn't lead to NaN for testing
         #testsystem.exen_samplers[environment].ncmc_engine.write_ncmc_interval = 100 # write PDB files for NCMC switching
-        testsystem.mcmc_samplers[environment].nsteps = 2500
+        testsystem.mcmc_samplers[environment].nsteps = 10000
         testsystem.mcmc_samplers[environment].timestep = 1.0 * unit.femtoseconds
 
         testsystem.mcmc_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].proposal_engine.verbose = True
         testsystem.sams_samplers[environment].verbose = True
-        #testsystem.mcmc_samplers[environment].run(niterations=5)
-        #testsystem.exen_samplers[environment].run(niterations=5)
-
-        #testsystem.sams_samplers[environment].run(niterations=5)
 
     # Run ligand in solvent constant-pH sampler calibration
     testsystem.sams_samplers['explicit-inhibitor'].verbose=True
-    testsystem.sams_samplers['explicit-inhibitor'].run(niterations=100)
-    #testsystem.exen_samplers['vacuum-inhibitor'].verbose=True
-    #testsystem.exen_samplers['vacuum-inhibitor'].run(niterations=100)
-    #testsystem.exen_samplers['explicit-complex'].verbose=True
-    #testsystem.exen_samplers['explicit-complex'].run(niterations=100)
+    testsystem.sams_samplers['explicit-inhibitor'].run(niterations=1000)
 
     # Run constant-pH sampler
     testsystem.designer.verbose = True
     testsystem.designer.update_target_probabilities() # update log weights from inhibitor in solvent calibration
-    testsystem.designer.run(niterations=500)
+    testsystem.designer.run(niterations=1000)
 
 def run_imidazole():
     """
@@ -2602,7 +2592,7 @@ def run_imidazole():
         print(environment)
         #testsystem.exen_samplers[environment].pdbfile = open('imidazole-constph-%s.pdb' % environment, 'w')
         #testsystem.exen_samplers[environment].geometry_pdbfile = open('imidazole-constph-%s-geometry-proposals.pdb' % environment, 'w')
-        testsystem.exen_samplers[environment].ncmc_engine.nsteps = 500
+        testsystem.exen_samplers[environment].ncmc_engine.nsteps = 0
         testsystem.exen_samplers[environment].ncmc_engine.timestep = 1.0 * unit.femtoseconds
         testsystem.exen_samplers[environment].accept_everything = False # accept everything that doesn't lead to NaN for testing
         #testsystem.exen_samplers[environment].ncmc_engine.write_ncmc_interval = 100 # write PDB files for NCMC switching
@@ -2616,7 +2606,7 @@ def run_imidazole():
 
     # Run ligand in solvent constant-pH sampler calibration
     testsystem.sams_samplers['explicit-imidazole'].verbose=True
-    testsystem.sams_samplers['explicit-imidazole'].run(niterations=100)
+    testsystem.sams_samplers['explicit-imidazole'].run(niterations=500)
 
 def run_fused_rings():
     """
@@ -2646,14 +2636,14 @@ def run_fused_rings():
         analysis.plot_ncmc_work('ncmc-%d.pdf' % ncmc_steps)
 
 if __name__ == '__main__':
-    testsystem = PropaneTestSystem(scheme='ncmc-geometry-ncmc', options = {'nsteps':100})
-    run_null_system(testsystem)
+    #testsystem = PropaneTestSystem(scheme='ncmc-geometry-ncmc', options = {'nsteps':100})
+    #run_null_system(testsystem)
     #run_alanine_system(sterics=False)
     #run_fused_rings()
     #run_valence_system()
     #run_t4_inhibitors()
     #run_imidazole()
-    #run_constph_abl()
+    run_constph_abl()
     #run_abl_affinity_write_pdb_ncmc_switching()
     #run_kinase_inhibitors()
     #run_abl_imatinib()
