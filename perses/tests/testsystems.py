@@ -2560,8 +2560,11 @@ def run_constph_abl():
         print(environment)
         testsystem.exen_samplers[environment].pdbfile = open('abl-imatinib-constph-%s.pdb' % environment, 'w')
         testsystem.exen_samplers[environment].geometry_pdbfile = open('abl-imatinib-constph-%s-geometry-proposals.pdb' % environment, 'w')
-        testsystem.exen_samplers[environment].ncmc_engine.nsteps = 50
+        testsystem.exen_samplers[environment].ncmc_engine.nsteps = 500
         testsystem.exen_samplers[environment].ncmc_engine.timestep = 1.0 * unit.femtoseconds
+        testsystem.exen_samplers[environment].ncmc_engine.softcore_alpha = 0.5
+        testsystem.exen_samplers[environment].ncmc_engine.softcore_beta = 0.5 # soften electrostatics
+        testsystem.exen_samplers[environment].ncmc_engine.functions = perses.annihilation.ncmc_switching.linear_functions # use linear protocol
         testsystem.exen_samplers[environment].accept_everything = False # accept everything that doesn't lead to NaN for testing
         #testsystem.exen_samplers[environment].ncmc_engine.write_ncmc_interval = 100 # write PDB files for NCMC switching
         testsystem.mcmc_samplers[environment].nsteps = 2500
@@ -2571,18 +2574,10 @@ def run_constph_abl():
         testsystem.exen_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].proposal_engine.verbose = True
         testsystem.sams_samplers[environment].verbose = True
-        #testsystem.mcmc_samplers[environment].run(niterations=5)
-        #testsystem.exen_samplers[environment].run(niterations=5)
-
-        #testsystem.sams_samplers[environment].run(niterations=5)
 
     # Run ligand in solvent constant-pH sampler calibration
     testsystem.sams_samplers['explicit-inhibitor'].verbose=True
-    testsystem.sams_samplers['explicit-inhibitor'].run(niterations=100)
-    #testsystem.exen_samplers['vacuum-inhibitor'].verbose=True
-    #testsystem.exen_samplers['vacuum-inhibitor'].run(niterations=100)
-    #testsystem.exen_samplers['explicit-complex'].verbose=True
-    #testsystem.exen_samplers['explicit-complex'].run(niterations=100)
+    testsystem.sams_samplers['explicit-inhibitor'].run(niterations=500)
 
     # Run constant-pH sampler
     testsystem.designer.verbose = True
@@ -2646,14 +2641,14 @@ def run_fused_rings():
         analysis.plot_ncmc_work('ncmc-%d.pdf' % ncmc_steps)
 
 if __name__ == '__main__':
-    testsystem = PropaneTestSystem(scheme='ncmc-geometry-ncmc', options = {'nsteps':100})
-    run_null_system(testsystem)
+    #testsystem = PropaneTestSystem(scheme='ncmc-geometry-ncmc', options = {'nsteps':100})
+    #run_null_system(testsystem)
     #run_alanine_system(sterics=False)
     #run_fused_rings()
     #run_valence_system()
     #run_t4_inhibitors()
     #run_imidazole()
-    #run_constph_abl()
+    run_constph_abl()
     #run_abl_affinity_write_pdb_ncmc_switching()
     #run_kinase_inhibitors()
     #run_abl_imatinib()

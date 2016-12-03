@@ -16,6 +16,13 @@ default_functions = {
     'lambda_torsions' : 'lambda'
     }
 
+linear_functions = {
+    'lambda_sterics' : 'lambda',
+    'lambda_electrostatics' : 'lambda',
+    'lambda_bonds' : 'lambda',
+    'lambda_angles' : 'lambda',
+    'lambda_torsions' : 'lambda'
+    }
 
 functions_disable_all = {
     'lambda_sterics' : 'lambda',
@@ -105,6 +112,8 @@ class NCMCEngine(object):
         if temperature == None:
             temperature = default_temperature
 
+        self.softcore_alpha = 0.5
+        self.softcore_beta = 0.0
         self.temperature = temperature
         self.functions = copy.deepcopy(functions)
         self.nsteps = nsteps
@@ -262,7 +271,7 @@ class NCMCEngine(object):
         """
         # Create an alchemical factory.
         from alchemy import AbsoluteAlchemicalFactory
-        alchemical_factory = AbsoluteAlchemicalFactory(unmodified_system, ligand_atoms=alchemical_atoms, annihilate_electrostatics=True, annihilate_sterics=True, alchemical_torsions=True, alchemical_bonds=True, alchemical_angles=True, softcore_beta=0.0)
+        alchemical_factory = AbsoluteAlchemicalFactory(unmodified_system, ligand_atoms=alchemical_atoms, annihilate_electrostatics=True, annihilate_sterics=True, alchemical_torsions=True, alchemical_bonds=True, alchemical_angles=True, softcore_alpha=self.softcore_alpha, softcore_beta=self.softcore_beta)
 
         # Return the alchemically-modified system in fully-interacting form.
         alchemical_system = alchemical_factory.createPerturbedSystem()
