@@ -1297,6 +1297,8 @@ class NCMCGHMCAlchemicalIntegrator(NCMCAlchemicalIntegrator):
         """
         super(NCMCGHMCAlchemicalIntegrator, self).__init__(temperature, system, functions, nsteps, steps_per_propagation, timestep, direction)
 
+        self.has_statistics = True # provides statistics on number of acceptances
+
         gamma = collision_rate
 
         # NCMC variables
