@@ -1346,6 +1346,8 @@ class SAMSSampler(object):
         Iterations completed.
     verbose : bool
         If True, verbose debug output is printed.
+    initial_gamma : float, default=1.0
+        Initial value of 'gamma' for log weight adaption.
 
     References
     ----------
@@ -1418,6 +1420,7 @@ class SAMSSampler(object):
         # Initialize.
         self.iteration = 0
         self.verbose = False
+        self.initial_gamma = 1.0 # initial value of 'gamma'
 
     @property
     def state_keys(self):
@@ -1444,16 +1447,16 @@ class SAMSSampler(object):
         # Update estimates of logZ.
         if self.update_method == 'one-stage':
             # Based on Eq. 9 of Ref. [1]
-            gamma = 1.0 / float(self.iteration+1)
+            gamma = self.initial_gamma / float(self.iteration+1)
         elif self.update_method == 'two-stage':
             # Keep gamma large until second stage is activated.
             if not hasattr(self, 'second_stage_start') or (self.iteration < self.second_stage_start):
                 # First stage.
-                gamma = 1.0
+                gamma = self.initial_gamma
                 # TODO: Determine when to switch to second stage
             else:
                 # Second stage.
-                gamma = 1.0 / float(self.iteration - self.second_stage_start + 1)
+                gamma = self.initial_gamma / float(self.iteration - self.second_stage_start + 1)
         else:
             raise Exception("SAMS update method '%s' unknown." % self.update_method)
         self.logZ[state_key] += gamma / np.exp(self.log_target_probabilities[state_key])

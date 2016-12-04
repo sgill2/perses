@@ -348,6 +348,14 @@ class NCMCEngine(object):
             if self._storage:
                 self._storage.write_array('work_%s' % direction, work, iteration=iteration)
 
+            if integrator.has_statistics:
+                (naccept, nattempt) = integrator.getStatistics(context)        
+                fraction_accepted = float(naccept) / float(nattempt)
+                if self._storage:
+                    self._storage.write_quantity('fraction_accepted_%s' % direction, fraction_accepted, iteration=iteration)
+                if self.verbose:
+                    print('  NCMC %s : %.3f %% of GHMC steps accepted' % (direction, fraction_accepted * 100))
+
         except Exception as e:
             # Trap NaNs as a special exception (allowing us to reject later, if desired)
             if str(e) == "Particle coordinate is nan":

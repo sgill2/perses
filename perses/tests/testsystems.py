@@ -2561,14 +2561,14 @@ def run_constph_abl():
         print(environment)
         testsystem.exen_samplers[environment].pdbfile = open('abl-imatinib-constph-%s.pdb' % environment, 'w')
         testsystem.exen_samplers[environment].geometry_pdbfile = open('abl-imatinib-constph-%s-geometry-proposals.pdb' % environment, 'w')
-        testsystem.exen_samplers[environment].ncmc_engine.nsteps = 500
+        testsystem.exen_samplers[environment].ncmc_engine.nsteps = 10000
         testsystem.exen_samplers[environment].ncmc_engine.timestep = 1.0 * unit.femtoseconds
         testsystem.exen_samplers[environment].ncmc_engine.softcore_alpha = 0.5
         testsystem.exen_samplers[environment].ncmc_engine.softcore_beta = 0.5 # soften electrostatics
         testsystem.exen_samplers[environment].ncmc_engine.functions = perses.annihilation.ncmc_switching.linear_functions # use linear protocol
         testsystem.exen_samplers[environment].accept_everything = False # accept everything that doesn't lead to NaN for testing
         #testsystem.exen_samplers[environment].ncmc_engine.write_ncmc_interval = 100 # write PDB files for NCMC switching
-        testsystem.mcmc_samplers[environment].nsteps = 10000
+        testsystem.mcmc_samplers[environment].nsteps = 2000
         testsystem.mcmc_samplers[environment].timestep = 1.0 * unit.femtoseconds
         testsystem.exen_samplers[environment].initial_log_weight_guess = 'logP' # accept each transition the first time it is proposed, using logP to estimate initial log weight
         testsystem.mcmc_samplers[environment].verbose = True
@@ -2604,15 +2604,17 @@ def run_imidazole():
         #testsystem.exen_samplers[environment].ncmc_engine.write_ncmc_interval = 100 # write PDB files for NCMC switching
         testsystem.mcmc_samplers[environment].nsteps = 500
         testsystem.mcmc_samplers[environment].timestep = 1.0 * unit.femtoseconds
-        testsystem.exen_samplers[environment].initial_log_weight_guess = 'logP' # accept each transition the first time it is proposed, using logP to estimate initial log weight
+        #testsystem.exen_samplers[environment].initial_log_weight_guess = 'logP' # accept each transition the first time it is proposed, using logP to estimate initial log weight
         testsystem.mcmc_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].verbose = True
         testsystem.exen_samplers[environment].proposal_engine.verbose = True
         testsystem.sams_samplers[environment].verbose = True
+        testsystem.sams_samplers[environment].initial_gamma = 10.0 # use larger correction during initial phase
+        testsystem.sams_samplers[environment].update_method = 'two-stage'
 
-    environment = 'vacuum-imidazole'
-    testsystem.mcmc_samplers[environment].run(niterations=10)
-    testsystem.sams_samplers[environment].run(niterations=500)
+    #environment = 'vacuum-imidazole'
+    #testsystem.mcmc_samplers[environment].run(niterations=10)
+    #testsystem.sams_samplers[environment].run(niterations=500)
 
     # Run ligand in solvent constant-pH sampler calibration
     testsystem.sams_samplers['explicit-imidazole'].run(niterations=500)
@@ -2651,8 +2653,8 @@ if __name__ == '__main__':
     #run_fused_rings()
     #run_valence_system()
     #run_t4_inhibitors()
-    run_imidazole()
-    #run_constph_abl()
+    #run_imidazole()
+    run_constph_abl()
     #run_abl_affinity_write_pdb_ncmc_switching()
     #run_kinase_inhibitors()
     #run_abl_imatinib()
