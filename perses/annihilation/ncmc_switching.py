@@ -266,6 +266,14 @@ class NCMCEngine(object):
 
         # Return the alchemically-modified system in fully-interacting form.
         alchemical_system = alchemical_factory.createPerturbedSystem()
+
+        # Disable barostat so that it isn't used during NCMC
+        # In principle, it is OK to use the barostat using GHMC, but not VV.
+        # For safety, we disable it anyway.
+        for force in alchemical_system.getForces():
+            if hasattr(force, 'setFrequency'):
+                force.setFrequency(0)
+
         return alchemical_system
 
     def _integrate_switching(self, integrator, context, topology, indices, iteration, direction):
@@ -722,6 +730,14 @@ class NCMCHybridEngine(NCMCEngine):
         # Return the alchemically-modified system in fully-interacting form.
 #        alchemical_system, _, alchemical_positions, final_atom_map, initial_atom_map = alchemical_factory.createPerturbedSystem()
         alchemical_system, alchemical_topology, alchemical_positions, final_atom_map, initial_atom_map = alchemical_factory.createPerturbedSystem()
+
+        # Disable barostat so that it isn't used during NCMC
+        # In principle, it is OK to use the barostat using GHMC, but not VV.
+        # For safety, we disable it anyway.
+        for force in alchemical_system.getForces():
+            if hasattr(force, 'setFrequency'):
+                force.setFrequency(0)
+        
         return [unmodified_old_system, unmodified_new_system,
                 alchemical_system, alchemical_topology, alchemical_positions, final_atom_map,
                 initial_atom_map]
