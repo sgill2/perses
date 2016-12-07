@@ -1956,3 +1956,24 @@ class PropaneProposalEngine(NullProposalEngine):
                 atom_map[bond[0].index] = bond[0].index
                 atom_map[bond[1].index] = bond[1].index
         return atom_map
+
+class TractableValenceProposalEngine(ProposalEngine):
+    """
+    This class serves as the proposal engine for a system of tractable valence-only molecules:
+    each molecule contains 3, 4, 5, or 6 atoms in a straight chain. The chemical state key is simply
+    '3atom' for the 3 atom system, '4atom' for the 4 atom system, etc.
+
+    Arguments
+    ---------
+    system_generator : perses.rjmc.SystemGenerator object
+        This argument is ignored, since the systems being used here are not easily generated via app.ForceField
+    proposal_metadata : dict, optional, default None
+        Metadata for the ProposalEngine. Ignored.
+    always_change : Boolean, default True
+        Ensure that a different chemical state is always chosen. Optional, default True
+    verbose : Boolean, default False
+        Ignored.
+    """
+
+    def __init__(self, system_generator, proposal_metadata=None, always_change=True, verbose=False):
+        super(TractableValenceProposalEngine, self).__init__(system_generator, proposal_metadata, always_change, verbose)
