@@ -1878,10 +1878,11 @@ class ValenceSmallMoleculeLibraryTestSystem(PersesTestSystem):
     >>> sams_sampler = testsystem.sams_samplers['vacuum']
 
     """
+    _initial_molecules = ['CCCCC','CC(C)CC', 'CCC(C)C', 'CCCCC', 'C(CC)CCC']
+
     def __init__(self, **kwargs):
         super(ValenceSmallMoleculeLibraryTestSystem, self).__init__(**kwargs)
-        #initial_molecules = ['CCCCC','CC(C)CC', 'CCC(C)C', 'CCCCC', 'C(CC)CCC']
-        initial_molecules = ['SS','SSS','SSSS']
+        initial_molecules = self._initial_molecules
         molecules = self._canonicalize_smiles(initial_molecules)
         environments = ['vacuum']
 
@@ -1992,6 +1993,17 @@ class ValenceSmallMoleculeLibraryTestSystem(PersesTestSystem):
             can_smi = oechem.OECreateIsoSmiString(mol)
             list_of_canonicalized_smiles.append(can_smi)
         return list_of_canonicalized_smiles
+
+class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSystem):
+    """
+    A subclass of the ValenceSmallMoleculeLibraryTestSystem that contains a set of molecules
+    whose relative free energies can be computed numerically. Their SMILES strings are
+    SS, SSS, SSSS
+    """
+    _initial_molecules = ['SS','SSS','SSSS']
+
+    def __init__(self, **kwargs):
+        super(self, TractableValenceSmallMoleculeTestSystem).__init__(**kwargs)
 
 class NullTestSystem(PersesTestSystem):
     """
