@@ -1880,7 +1880,8 @@ class ValenceSmallMoleculeLibraryTestSystem(PersesTestSystem):
     """
     def __init__(self, **kwargs):
         super(ValenceSmallMoleculeLibraryTestSystem, self).__init__(**kwargs)
-        initial_molecules = ['CCCCC','CC(C)CC', 'CCC(C)C', 'CCCCC', 'C(CC)CCC']
+        #initial_molecules = ['CCCCC','CC(C)CC', 'CCC(C)C', 'CCCCC', 'C(CC)CCC']
+        initial_molecules = ['SS','SSS','SSSS']
         molecules = self._canonicalize_smiles(initial_molecules)
         environments = ['vacuum']
 
@@ -2646,11 +2647,11 @@ def run_fused_rings():
         analysis.plot_ncmc_work('ncmc-%d.pdf' % ncmc_steps)
 
 if __name__ == '__main__':
-    testsystem = PropaneTestSystem(scheme='ncmc-geometry-ncmc', options = {'nsteps':100})
-    run_null_system(testsystem)
+    #testsystem = PropaneTestSystem(scheme='ncmc-geometry-ncmc', options = {'nsteps':100})
+    #run_null_system(testsystem)
     #run_alanine_system(sterics=False)
     #run_fused_rings()
-    #run_valence_system()
+    run_valence_system()
     #run_t4_inhibitors()
     #run_imidazole()
     #run_constph_abl()
