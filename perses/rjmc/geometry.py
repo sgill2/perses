@@ -765,6 +765,41 @@ class FFAllAngleGeometryEngine(GeometryEngine):
         phis : np.ndarray, in radians
             The torsions angles at which a potential was calculated
         """
+        logq, phis = self._torsion_log_unnormalized_probability_mass_function(growth_context, torsion, positions, r, theta, beta, n_divisions=n_divisions)
+        logq -= max(logq)
+        q = np.exp(logq)
+        Z = np.sum(q)
+        logp_torsions = logq - np.log(Z)
+        return logp_torsions, phis
+
+    def _torsion_log_unnormalized_probability_mass_function(self, growth_context, torsion, positions, r, theta, beta, n_divisions=360):
+        """
+        Calculate the torsion logp pmf using OpenMM, and return the normalizing constant Z as well.
+
+        Parameters
+        ----------
+        growth_context : openmm.Context
+            Context containing the modified system and
+        torsion : parmed.Dihedral
+            parmed Dihedral containing relevant atoms
+        positions : [n,3] np.ndarray in nm
+            positions of the atoms in the system
+        r : float in nm
+            bond length
+        theta : float in radians
+            bond angle
+        beta : float
+            inverse temperature
+        n_divisions : int, optional
+            number of divisions for the torsion scan
+
+        Returns
+        -------
+        logp_torsions : np.ndarray of float
+            normalized probability of each of n_divisions of torsion
+        phis : np.ndarray, in radians
+            The torsions angles at which a potential was calculated
+        """
         logq = np.zeros(n_divisions)
         atom_idx = torsion.atom1.idx
         xyzs, phis = self._torsion_scan(torsion, positions, r, theta, n_divisions=n_divisions)
@@ -787,28 +822,8 @@ class FFAllAngleGeometryEngine(GeometryEngine):
         if np.sum(np.isnan(logq)) == n_divisions:
             raise Exception("All %d torsion energies in torsion PMF are NaN." % n_divisions)
         logq[np.isnan(logq)] = -np.inf
-        logq -= max(logq)
-        q = np.exp(logq)
-        Z = np.sum(q)
-        logp_torsions = logq - np.log(Z)
 
-        if hasattr(self, '_proposal_pdbfile'):
-            # Write proposal probabilities to PDB file as B-factors for inert atoms
-            f_i = -logp_torsions
-            f_i -= f_i.min() # minimum free energy is zero
-            f_i[f_i > 999.99] = 999.99
-            self._proposal_pdbfile.write('MODEL\n')
-            for i, xyz in enumerate(xyzs):
-                self._proposal_pdbfile.write('ATOM  %5d %4s %3s %c%4d    %8.3f%8.3f%8.3f%6.2f%6.2f\n' % (i+1, ' Ar ', 'Ar ', ' ', atom_idx+1, 10*xyz[0], 10*xyz[1], 10*xyz[2], np.exp(logp_torsions[i]), f_i[i]))
-            self._proposal_pdbfile.write('TER\n')
-            self._proposal_pdbfile.write('ENDMDL\n')
-            # TODO: Write proposal PMFs to storage
-            # atom_proposal_indices[order]
-            # atom_positions[order,k]
-            # torsion_pmf[order, division_index]
-
-        return logp_torsions, phis
-
+        return logq, phis
 
     def _propose_torsion(self, growth_context, torsion, positions, r, theta, beta, n_divisions=360):
         """
