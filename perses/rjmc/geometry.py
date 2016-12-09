@@ -766,7 +766,7 @@ class FFAllAngleGeometryEngine(GeometryEngine):
             The torsions angles at which a potential was calculated
         """
         logq, phis = self._torsion_log_unnormalized_probability_mass_function(growth_context, torsion, positions, r, theta, beta, n_divisions=n_divisions)
-        logq -= max(logq)
+        logq -= np.max(logq)
         q = np.exp(logq)
         Z = np.sum(q)
         logp_torsions = logq - np.log(Z)
