@@ -2005,6 +2005,61 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
     def __init__(self, **kwargs):
         super(self, TractableValenceSmallMoleculeTestSystem).__init__(**kwargs)
 
+    def _get_Z_H_SSH(self):
+        """
+        Get the normalizing constant for p(H|S-S-H)
+
+        Returns
+        -------
+        Z_H_SSH : float
+        """
+        from perses.tests import utils
+        from perses.rjmc import geometry
+        import parmed
+
+        #make geometry engine
+        geometry_engine = geometry.FFAllAngleGeometryEngine()
+
+        #get the system generator to make a system out of the topology
+        system_generator = self.system_generators['vacuum']
+        topology = utils.smiles_to_topology("SS")
+        system = system_generator.build_system(topology)
+        oemol = utils.createOEMolFromSMILES("SS")
+
+        #need to generate positions too, since we are going to evaluate energies
+        positions = utils.extractPositionsFromOEMOL(oemol)
+
+        integrator = openmm.VerletIntegrator(1.0*unit.femtoseconds)
+        platform = openmm.Platform.getPlatformByName("Reference")
+        context = openmm.Context(system, integrator, platform)
+
+        context.setPositions(positions)
+
+        #make a structure and extract the relevant torsion
+        structure = parmed.openmm.load_topology(topology, system)
+
+        #there are only four atoms, so take dihedral 0
+        torsion = structure.dihedrals[0]
+
+
+
+
+
+
+
+    def _get_bond_normalizing_constant(self, bond_with_units):
+        """
+
+        Parameters
+        ----------
+        bond_with_units
+
+        Returns
+        -------
+
+        """
+
+
 class NullTestSystem(PersesTestSystem):
     """
     Test turning a small molecule into itself in vacuum
