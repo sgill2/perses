@@ -1928,7 +1928,7 @@ class ValenceSmallMoleculeLibraryTestSystem(PersesTestSystem):
         thermodynamic_states = dict()
         temperature = 300*unit.kelvin
         pressure = 1.0*unit.atmospheres
-        thermodynamic_states['vacuum']   = ThermodynamicState(system=systems['vacuum'], temperature=temperature)
+        thermodynamic_states['vacuum'] = ThermodynamicState(system=systems['vacuum'], temperature=temperature)
 
         # Create SAMS samplers
         from perses.samplers.samplers import SamplerState, MCMCSampler, ExpandedEnsembleSampler, SAMSSampler
@@ -2004,6 +2004,7 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
     def __init__(self, **kwargs):
         super(self, TractableValenceSmallMoleculeTestSystem).__init__(**kwargs)
+        self.beta = self.thermodynamic_states['vacuum'].beta
 
     def _get_Z_H_SSH(self):
         """
@@ -2013,9 +2014,31 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         -------
         Z_H_SSH : float
         """
+        pass
+
+
+
+    def _get_torsion_normalizing_constant(self, torsion, torsion_positions):
+        """
+        Get the normalizing constant of the torsion probability distribution
+        Parameters
+        ----------
+        torsion : parmed.Dihedral object
+             The torsion whose normalization constant we want
+        torsion_positions : [4,3] ndarray of float
+             The positions for atom1, atom2, atom3, atom4 of the torsion
+
+        Returns
+        -------
+        Z : float
+            The normalizing constant of the torsion distribution
+        """
         from perses.tests import utils
-        from perses.rjmc import geometry
+        from perses.rjmc import geometry, coordinate_numba
         import parmed
+
+        #set a large number of trial points for the torsion scan
+        N_DIVISIONS = 10000
 
         #make geometry engine
         geometry_engine = geometry.FFAllAngleGeometryEngine()
@@ -2041,9 +2064,31 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         #there are only four atoms, so take dihedral 0
         torsion = structure.dihedrals[0]
 
+        #get the positions of each atom
+        positions_without_units = positions.in_units_of(unit.nanometers)
+        atom0_position = positions_without_units[torsion.atom1.idx]
+        atom1_position = positions_without_units[torsion.atom2.idx]
+        atom2_position = positions_without_units[torsion.atom3.idx]
+        atom3_position = positions_without_units[torsion.atom4.idx]
 
+        #get the internal coordinates and add the appropriate units:
+        internals = coordinate_numba.cartesian_to_internal(atom0_position, atom1_position, atom2_position, atom3_position)
+        r = internals[0]*unit.nanometers
+        theta = internals[1]*unit.radians
 
+        logq, phis = geometry_engine._torsion_log_unnormalized_probability_mass_function(context, torsion, positions, r, theta, self.beta, n_divisions=N_DIVISIONS)
 
+        #calculate the normalizing constant of this histogram, with each phi at the center of a bin
+        dphi = 2.0*np.pi / N_DIVISIONS
+        Z = 0.0
+        logq -= np.max(logq)
+        q = np.exp(logq)
+
+        #loop through the phi points and add up the bin areas
+        for idx in range(len(phis)):
+            Z += dphi*q[idx]
+
+        return Z
 
 
 
