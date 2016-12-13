@@ -2014,25 +2014,6 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         -------
         Z_H_SSH : float
         """
-        pass
-
-
-
-    def _get_torsion_normalizing_constant(self, torsion, torsion_positions):
-        """
-        Get the normalizing constant of the torsion probability distribution
-        Parameters
-        ----------
-        torsion : parmed.Dihedral object
-             The torsion whose normalization constant we want
-        torsion_positions : [4,3] ndarray of float
-             The positions for atom1, atom2, atom3, atom4 of the torsion
-
-        Returns
-        -------
-        Z : float
-            The normalizing constant of the torsion distribution
-        """
         from perses.tests import utils
         from perses.rjmc import geometry, coordinate_numba
         import parmed
@@ -2063,6 +2044,31 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         #there are only four atoms, so take dihedral 0
         torsion = structure.dihedrals[0]
+
+
+
+
+    def _get_torsion_normalizing_constant(self, torsion, torsion_positions, context):
+        """
+        Get the normalizing constant of the torsion probability distribution
+        Parameters
+        ----------
+        torsion : parmed.Dihedral object
+             The torsion whose normalization constant we want
+        torsion_positions : [4,3] ndarray of float
+             The positions for atom1, atom2, atom3, atom4 of the torsion
+        context : openmm.Context object
+             Context containing the relevant system
+
+        Returns
+        -------
+        Z : float
+            The normalizing constant of the torsion distribution
+        """
+        from perses.rjmc import geometry, coordinate_numba
+
+        geometry_engine = geometry.FFAllAngleGeometryEngine()
+        N_DIVISIONS = 10000
 
         #get the positions of each atom
         positions_without_units = positions.in_units_of(unit.nanometers)
@@ -2097,7 +2103,7 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         Parameters
         ----------
-        bond_with_units
+        bond_with_units : parmed.Bond object
 
         Returns
         -------
