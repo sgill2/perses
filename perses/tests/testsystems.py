@@ -2003,23 +2003,27 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
     _initial_molecules = ['SS','SSS','SSSS']
 
     def __init__(self, **kwargs):
-        super(self, TractableValenceSmallMoleculeTestSystem).__init__(**kwargs)
+        super(TractableValenceSmallMoleculeTestSystem, self).__init__(**kwargs)
         self.beta = self.thermodynamic_states['vacuum'].beta
 
-    def _get_Z_H_SSH(self):
+    def _get_logZ_H_SSH(self):
         """
-        Get the normalizing constant for p(H|S-S-H)
+        Get the log normalizing constant for p(H|S-S-H)
 
         Returns
         -------
-        Z_H_SSH : float
+        logZ_H_SSH : float
         """
         from perses.tests import utils
         from perses.rjmc import geometry, coordinate_numba
         import parmed
+        import collections
 
         #set a large number of trial points for the torsion scan
         N_DIVISIONS = 10000
+
+        #useful comparison lambda
+        compare = lambda x, y: collections.Counter(x) == collections.Counter(y)
 
         #appropriate atomic numbers
         HYDROGEN_ATOMIC_NUMBER = 1
@@ -2030,7 +2034,7 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         #get the system generator to make a system out of the topology
         system_generator = self.system_generators['vacuum']
-        topology = utils.smiles_to_topology("SS")
+        topology, _ = utils.smiles_to_topology("SS")
         system = system_generator.build_system(topology)
         oemol = utils.createOEMolFromSMILES("SS")
 
@@ -2049,26 +2053,43 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         #there are only four atoms, so take dihedral 0
         torsion = structure.dihedrals[0]
 
-        torsion_normalizing_constant = self._get_torsion_normalizing_constant(torsion, positions, context)
+        torsion_logZ = self._get_torsion_log_normalizing_constant(torsion, positions, context)
 
         bonds_of_interest = []
         #find H-S bond:
+        bond_elements_target = [HYDROGEN_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER]
         for bond in structure.bonds:
-            if bond.atom1.element == HYDROGEN_ATOMIC_NUMBER and bond.atom2.element == SULFUR_ATOMIC_NUMBER or bond.atom1.element == SULFUR_ATOMIC_NUMBER and bond.atom2.element == HYDROGEN_ATOMIC_NUMBER:
+            bond_elements = [bond.atom1.element, bond.atom2.element]
+            if compare(bond_elements_target, bond_elements):
                 bond_of_interest = bond
+
 
         if bond_of_interest is None:
             raise ValueError("There were no bonds matching the appropriate criteria")
 
         bond_with_units = geometry_engine._add_bond_units(bond_of_interest)
-        bond_logZ = self._get_bond_normalizing_constant(bond_with_units)
+        bond_logZ = self._get_bond_log_normalizing_constant(bond_with_units)
+
+        #find H-S-S angle:
+        angle_element_target = [HYDROGEN_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER]
+        for angle in structure.angles:
+            angle_elements = [angle.atom1.element, angle.atom2.element, angle.atom3.element]
+            if compare(angle_element_target, angle_elements):
+                angle_of_interest = angle
+
+        if angle_of_interest is None:
+            raise ValueError("There were no angles matching the appropriate criteria")
+
+        angle_with_units = geometry_engine._add_angle_units(angle_of_interest)
+        angle_logZ = self._get_angle_log_normalizing_constant(angle_with_units)
+
+        return torsion_logZ + angle_logZ + bond_logZ
 
 
 
 
 
-
-    def _get_torsion_normalizing_constant(self, torsion, positions, context):
+    def _get_torsion_log_normalizing_constant(self, torsion, positions, context):
         """
         Get the normalizing constant of the torsion probability distribution
         Parameters
@@ -2082,8 +2103,8 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         Returns
         -------
-        Z : float
-            The normalizing constant of the torsion distribution
+        log_Z : float
+            The log normalizing constant of the torsion distribution
         """
         from perses.rjmc import geometry, coordinate_numba
 
@@ -2091,7 +2112,7 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         N_DIVISIONS = 10000
 
         #get the positions of each atom
-        positions_without_units = positions.in_units_of(unit.nanometers)
+        positions_without_units = positions.value_in_unit(unit.nanometers).astype(np.float64)
         atom0_position = positions_without_units[torsion.atom1.idx]
         atom1_position = positions_without_units[torsion.atom2.idx]
         atom2_position = positions_without_units[torsion.atom3.idx]
@@ -2114,12 +2135,13 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         for idx in range(len(phis)):
             Z += dphi*q[idx]
 
-        return Z
+        return np.log(Z)
 
 
 
-    def _get_bond_normalizing_constant(self, bond_with_units):
+    def _get_bond_log_normalizing_constant(self, bond_with_units):
         """
+        Calculate the log normalizing constant for the bond distribution analytically
 
         Parameters
         ----------
@@ -2128,7 +2150,7 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         Returns
         -------
-        bond_Z : float
+        logZ_r : float
             Normalizing constant of the bond
         """
         import simtk.unit as units
@@ -2136,7 +2158,28 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         bond_k = bond_with_units.type.k
         sigma_r = units.sqrt(1/(self.beta*bond_k))
         logZ_r = np.log((np.sqrt(2*np.pi)*(sigma_r.value_in_unit(units.angstrom))))
-        return np.exp(logZ_r)
+        return logZ_r
+
+    def _get_angle_log_normalizing_constant(self, angle_with_units):
+        """
+        Calculate the normalizing constant for the angle distribution analytically
+
+        Parameters
+        ----------
+        angle_with_units : parmed.Angle object
+            a parmed.Angle object with units added
+
+        Returns
+        -------
+        logZ_theta : float
+        """
+        import simtk.unit as units
+
+        angle_k = angle_with_units.type.k
+        sigma_theta = units.sqrt(1/(self.beta*angle_k))
+        logZ_theta = np.log((np.sqrt(2*np.pi)*(sigma_theta.value_in_unit(units.radians))))
+
+        return logZ_theta
 
 
 
@@ -2766,6 +2809,10 @@ def run_imidazole():
     testsystem.sams_samplers['explicit-imidazole'].verbose=True
     testsystem.sams_samplers['explicit-imidazole'].run(niterations=100)
 
+def run_tractable_system():
+    v = TractableValenceSmallMoleculeTestSystem()
+    print(v._get_logZ_H_SSH())
+
 def run_fused_rings():
     """
     Run fused rings test system.
@@ -2798,7 +2845,8 @@ if __name__ == '__main__':
     #run_null_system(testsystem)
     #run_alanine_system(sterics=False)
     #run_fused_rings()
-    run_valence_system()
+    #run_valence_system()
+    run_tractable_system()
     #run_t4_inhibitors()
     #run_imidazole()
     #run_constph_abl()
