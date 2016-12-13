@@ -2014,16 +2014,8 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         -------
         logZ_H_SSH : float
         """
-        from perses.tests import utils
-        from perses.rjmc import geometry, coordinate_numba
-        import parmed
+        from perses.rjmc import geometry
         import collections
-
-        #set a large number of trial points for the torsion scan
-        N_DIVISIONS = 10000
-
-        #useful comparison lambda
-        compare = lambda x, y: collections.Counter(x) == collections.Counter(y)
 
         #appropriate atomic numbers
         HYDROGEN_ATOMIC_NUMBER = 1
@@ -2032,23 +2024,8 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         #make geometry engine
         geometry_engine = geometry.FFAllAngleGeometryEngine()
 
-        #get the system generator to make a system out of the topology
-        system_generator = self.system_generators['vacuum']
-        topology, _ = utils.smiles_to_topology("SS")
-        system = system_generator.build_system(topology)
-        oemol = utils.createOEMolFromSMILES("SS")
-
-        #need to generate positions too, since we are going to evaluate energies
-        positions = utils.extractPositionsFromOEMOL(oemol)
-
-        integrator = openmm.VerletIntegrator(1.0*unit.femtoseconds)
-        platform = openmm.Platform.getPlatformByName("Reference")
-        context = openmm.Context(system, integrator, platform)
-
-        context.setPositions(positions)
-
-        #make a structure and extract the relevant torsion
-        structure = parmed.openmm.load_topology(topology, system)
+        #get the context and structure
+        context, structure = self._get_context_and_structure("SS")
 
         #there are only four atoms, so take dihedral 0
         torsion = structure.dihedrals[0]
@@ -2063,7 +2040,6 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
             if compare(bond_elements_target, bond_elements):
                 bond_of_interest = bond
 
-
         if bond_of_interest is None:
             raise ValueError("There were no bonds matching the appropriate criteria")
 
@@ -2072,6 +2048,35 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         #find H-S-S angle:
         angle_element_target = [HYDROGEN_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER]
+        angle_of_interest = self._find_angle_of_interest(structure, angle_element_target)
+
+        angle_with_units = geometry_engine._add_angle_units(angle_of_interest)
+        angle_logZ = self._get_angle_log_normalizing_constant(angle_with_units)
+
+        return torsion_logZ + angle_logZ + bond_logZ
+
+
+    def _find_angle_of_interest(self, structure, angle_element_target):
+        """
+        Utility function to find the angle of interest based on the elements that it contains
+
+        Parameters
+        ----------
+        structure : parmed.Structure
+            parmed structure object
+        angle_element_target : list of int
+            list of atomic numbers of elements expected in the angle
+
+        Returns
+        -------
+        angle_of_interest: parmed.Angle
+            parmed Angle object
+        """
+        import collections
+
+        #useful comparison lambda
+        compare = lambda x, y: collections.Counter(x) == collections.Counter(y)
+
         for angle in structure.angles:
             angle_elements = [angle.atom1.element, angle.atom2.element, angle.atom3.element]
             if compare(angle_element_target, angle_elements):
@@ -2080,13 +2085,77 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         if angle_of_interest is None:
             raise ValueError("There were no angles matching the appropriate criteria")
 
-        angle_with_units = geometry_engine._add_angle_units(angle_of_interest)
-        angle_logZ = self._get_angle_log_normalizing_constant(angle_with_units)
+        return angle_of_interest
 
-        return torsion_logZ + angle_logZ + bond_logZ
+    def _find_bond_of_interest(self, structure, bond_element_target):
+        """
+        Find the bond that satisfies the element criteria that have been passed in
 
+        Parameters
+        ----------
+        structure : parmed.Structure
+            structure of the molecular system of interest
+        bond_element_target : list of int
+            list of atomic numbers of elements involved in bond
 
+        Returns
+        -------
+        bond_of_interest : parmed.Bond
+            a bond that satisfies the criteria
+        """
+        import collections
 
+        #useful comparison lambda
+        compare = lambda x, y: collections.Counter(x) == collections.Counter(y)
+
+        for bond in structure.bonds:
+            bond_elements = [bond.atom1.element, bond.atom2.element]
+            if compare(bond_element_target, bond_elements):
+                bond_of_interest = bond
+
+        if bond_of_interest is None:
+            raise ValueError("There were no bonds matching the appropriate criteria")
+
+        return bond_of_interest
+
+    def _get_context_and_structure(self, smiles_string):
+        """
+        Utility function to get the context and parmed structure for doing the numerical calculations
+
+        Parameters
+        ----------
+        smiles_string : string
+            the smiles string of the molecular system
+
+        Returns
+        -------
+        context : openmm.Context
+            OpenMM context initialized with positions
+        structure : parmed.Structure
+            parmed Structure object representing the input system
+        """
+        from perses.tests import utils
+        import parmed
+
+        #get the system generator to make a system out of the topology
+        system_generator = self.system_generators['vacuum']
+        topology, _ = utils.smiles_to_topology(smiles_string)
+        system = system_generator.build_system(topology)
+        oemol = utils.createOEMolFromSMILES(smiles_string)
+
+        #need to generate positions too, since we are going to evaluate energies
+        positions = utils.extractPositionsFromOEMOL(oemol)
+
+        integrator = openmm.VerletIntegrator(1.0*unit.femtoseconds)
+        platform = openmm.Platform.getPlatformByName("Reference")
+        context = openmm.Context(system, integrator, platform)
+
+        context.setPositions(positions)
+
+        #make a structure and extract the relevant torsion
+        structure = parmed.openmm.load_topology(topology, system)
+
+        return context, structure
 
 
     def _get_torsion_log_normalizing_constant(self, torsion, positions, context):
