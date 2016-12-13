@@ -2021,6 +2021,10 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         #set a large number of trial points for the torsion scan
         N_DIVISIONS = 10000
 
+        #appropriate atomic numbers
+        HYDROGEN_ATOMIC_NUMBER = 1
+        SULFUR_ATOMIC_NUMBER = 16
+
         #make geometry engine
         geometry_engine = geometry.FFAllAngleGeometryEngine()
 
@@ -2045,10 +2049,26 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         #there are only four atoms, so take dihedral 0
         torsion = structure.dihedrals[0]
 
+        torsion_normalizing_constant = self._get_torsion_normalizing_constant(torsion, positions, context)
+
+        bonds_of_interest = []
+        #find H-S bond:
+        for bond in structure.bonds:
+            if bond.atom1.element == HYDROGEN_ATOMIC_NUMBER and bond.atom2.element == SULFUR_ATOMIC_NUMBER or bond.atom1.element == SULFUR_ATOMIC_NUMBER and bond.atom2.element == HYDROGEN_ATOMIC_NUMBER:
+                bond_of_interest = bond
+
+        if bond_of_interest is None:
+            raise ValueError("There were no bonds matching the appropriate criteria")
+
+        bond_with_units = geometry_engine._add_bond_units(bond_of_interest)
+        bond_logZ = self._get_bond_normalizing_constant(bond_with_units)
 
 
 
-    def _get_torsion_normalizing_constant(self, torsion, torsion_positions, context):
+
+
+
+    def _get_torsion_normalizing_constant(self, torsion, positions, context):
         """
         Get the normalizing constant of the torsion probability distribution
         Parameters
@@ -2104,11 +2124,20 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         Parameters
         ----------
         bond_with_units : parmed.Bond object
+            a parmed.Bond objects with units added
 
         Returns
         -------
-
+        bond_Z : float
+            Normalizing constant of the bond
         """
+        import simtk.unit as units
+
+        bond_k = bond_with_units.type.k
+        sigma_r = units.sqrt(1/(self.beta*bond_k))
+        logZ_r = np.log((np.sqrt(2*np.pi)*(sigma_r.value_in_unit(units.angstrom))))
+        return np.exp(logZ_r)
+
 
 
 class NullTestSystem(PersesTestSystem):
