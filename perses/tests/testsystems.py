@@ -2034,31 +2034,33 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         """
         from scipy.integrate import quadrature
 
-        bond_q = lambda r, r0, r_k: np.exp(-self.beta*(r_k/2)*(r-r0)**2)
-        angle_q = lambda theta, theta0, theta_k: np.exp(-self.beta*(theta_k/2)*(theta-theta0)**2)
-        torsion_q = lambda phi, n, torsion_k, gamma: np.exp(-self.beta*(torsion_k/2.0)*(1+np.cos(n*phi-gamma)))
+        beta = self.beta.value_in_unit(unit.mole/unit.kilojoule)
+        #bond_q = lambda r, r0, r_k: np.exp(-beta*(r_k/2)*(r-r0)**2)
+        angle_q = lambda theta, theta0, theta_k: np.exp(-beta*(theta_k/2)*(theta-theta0)**2)
+        torsion_q = lambda phi, n, torsion_k, gamma: np.exp(-beta*(torsion_k/2.0)*(1+np.cos(n*phi-gamma)))
         logZ = 0
 
         for bond in structure.bonds:
             bond_with_units = self._geometry_engine._add_bond_units(bond)
-            r_0 = bond_with_units.type.req
-            r_k = bond_with_units.type.k
-            bond_integral, err = quadrature(bond_q, 0*unit.nanometers, 1000*unit.nanometers, args=(r_0, r_k), vec_func=False)
+            r_0 = bond_with_units.type.req.value_in_unit(unit.nanometers)
+            r_k = bond_with_units.type.k.value_in_unit(unit.kilojoule/(unit.nanometer**2*unit.mole))
+            bond_q = lambda r: np.exp(-beta*(r_k/2)*(r-r_0)**2)
+            bond_integral, err = quadrature(bond_q, 0, 5, vec_func=False)
             logZ += np.log(bond_integral)
 
         for angle in structure.angles:
             angle_with_units = self._geometry_engine._add_angle_units(angle)
-            theta_0 = angle_with_units.type.theteq
-            theta_k = angle_with_units.type.k
-            angle_integral, err = quadrature(angle_q, 0*unit.radians, np.pi*unit.radians, args=(theta_0, theta_k), vec_func=False)
+            theta_0 = angle_with_units.type.theteq.value_in_unit(unit.radians)
+            theta_k = angle_with_units.type.k.value_in_unit(unit.kilojoule/(unit.radian**2*unit.mole))
+            angle_integral, err = quadrature(angle_q, 0, np.pi, args=(theta_0, theta_k), vec_func=False)
             logZ += np.log(angle_integral)
 
         for torsion in structure.dihedrals:
             torsion_with_units = self._geometry_engine._add_torsion_units(torsion)
             n = torsion_with_units.type.per
-            torsion_k = torsion_with_units.type.phi_k
-            gamma = torsion_with_units.type.phase
-            torsion_integral, err = quadrature(torsion_q, 0*unit.radians, 2.0*np.pi*unit.radians, args=(n, torsion_k, gamma), vec_func=False)
+            torsion_k = torsion_with_units.type.phi_k.value_in_unit(unit.kilojoule_per_mole)
+            gamma = torsion_with_units.type.phase.value_in_unit(unit.radian)
+            torsion_integral, err = quadrature(torsion_q, 0, 2.0, args=(n, torsion_k, gamma), vec_func=False)
             logZ += np.log(torsion_integral)
 
         return logZ
@@ -2735,7 +2737,7 @@ def run_imidazole():
 
 def run_tractable_system():
     v = TractableValenceSmallMoleculeTestSystem()
-    print(v._get_logZ_H_SSH())
+    print(v.log_normalizing_constants)
 
 def run_fused_rings():
     """
