@@ -2055,6 +2055,20 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         return torsion_logZ + angle_logZ + bond_logZ
 
+    def _find_torsion_of_interest(self, structure, torsion_element_target):
+        """
+        Find the torsion of interest for a given set of elements (in
+
+        Parameters
+        ----------
+        structure : parmed.Structure object
+
+        torsion_element_target
+
+        Returns
+        -------
+
+        """
 
     def _find_angle_of_interest(self, structure, angle_element_target):
         """
