@@ -1999,12 +1999,24 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
     A subclass of the ValenceSmallMoleculeLibraryTestSystem that contains a set of molecules
     whose relative free energies can be computed numerically. Their SMILES strings are
     SS, SSS, SSSS
+
+    Properties
+    ----------
+    normalizing_constants : dict of {str:float}
+        the normalizing constant for each molecule
     """
     _initial_molecules = ['SS','SSS','SSSS']
 
     def __init__(self, **kwargs):
+        from perses.rjmc import geometry
         super(TractableValenceSmallMoleculeTestSystem, self).__init__(**kwargs)
+        self._geometry_engine = geometry.FFAllAngleGeometryEngine()
         self.beta = self.thermodynamic_states['vacuum'].beta
+        self._normalizing_constants = {}
+
+        for molecule in self._initial_molecules:
+            _, structure = self._get_context_and_structure(molecule)
+            self._normalizing_constants[molecule] = self._get_log_normalizing_constant(structure)
 
     def _get_logZ_H_SSH(self):
         """
@@ -2014,43 +2026,32 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         -------
         logZ_H_SSH : float
         """
-        from perses.rjmc import geometry
-        import collections
-
         #appropriate atomic numbers
         HYDROGEN_ATOMIC_NUMBER = 1
         SULFUR_ATOMIC_NUMBER = 16
 
-        #make geometry engine
-        geometry_engine = geometry.FFAllAngleGeometryEngine()
-
         #get the context and structure
         context, structure = self._get_context_and_structure("SS")
 
-        #there are only four atoms, so take dihedral 0
-        torsion = structure.dihedrals[0]
+        #get the positions:
+        positions = context.getState(getPositions=True).getPositions(asNumpy=True)
+
+        #this is the torsion we are interested in here
+        torsion_element_target = [HYDROGEN_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER, HYDROGEN_ATOMIC_NUMBER]
+
+        torsion = self._find_torsion_of_interest(structure, torsion_element_target)
 
         torsion_logZ = self._get_torsion_log_normalizing_constant(torsion, positions, context)
 
-        bonds_of_interest = []
-        #find H-S bond:
-        bond_elements_target = [HYDROGEN_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER]
-        for bond in structure.bonds:
-            bond_elements = [bond.atom1.element, bond.atom2.element]
-            if compare(bond_elements_target, bond_elements):
-                bond_of_interest = bond
+        bond_of_interest = self._find_bond_of_interest(structure, torsion_element_target[:2])
 
-        if bond_of_interest is None:
-            raise ValueError("There were no bonds matching the appropriate criteria")
-
-        bond_with_units = geometry_engine._add_bond_units(bond_of_interest)
+        bond_with_units = self._geometry_engine._add_bond_units(bond_of_interest)
         bond_logZ = self._get_bond_log_normalizing_constant(bond_with_units)
 
         #find H-S-S angle:
-        angle_element_target = [HYDROGEN_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER, SULFUR_ATOMIC_NUMBER]
-        angle_of_interest = self._find_angle_of_interest(structure, angle_element_target)
+        angle_of_interest = self._find_angle_of_interest(structure, torsion_element_target[:3])
 
-        angle_with_units = geometry_engine._add_angle_units(angle_of_interest)
+        angle_with_units = self._geometry_engine._add_angle_units(angle_of_interest)
         angle_logZ = self._get_angle_log_normalizing_constant(angle_with_units)
 
         return torsion_logZ + angle_logZ + bond_logZ
@@ -2080,6 +2081,51 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
             raise ValueError("There were no torsions meeting the specified criteria")
 
         return torsion_of_interest
+
+    def _get_log_normalizing_constant(self, structure):
+        """
+        Get the log normalizing constant of this tractable system using numerical quadrature
+
+        Parameters
+        ----------
+        structure : parmed.Structure
+           A representation of the topology and system of the molecule of interest
+
+        Returns
+        -------
+        logZ : float
+            normalizing constant
+        """
+        from scipy.integrate import quadrature
+
+        bond_q = lambda r, r0, r_k: np.exp(-self.beta*(r_k/2)*(r-r0)**2)
+        angle_q = lambda theta, theta0, theta_k: np.exp(-self.beta*(theta_k/2)*(theta-theta0)**2)
+        torsion_q = lambda phi, n, torsion_k, gamma: np.exp(-self.beta*(torsion_k/2.0)*(1+np.cos(n*phi-gamma)))
+        logZ = 0
+
+        for bond in structure.bonds:
+            bond_with_units = self._geometry_engine._add_bond_units(bond)
+            r_0 = bond_with_units.type.req
+            r_k = bond_with_units.type.k
+            bond_integral, err = quadrature(bond_q, 0*unit.nanometers, 1000*unit.nanometers, args=(r_0, r_k), vec_func=False)
+            logZ += np.log(bond_integral)
+
+        for angle in structure.angles:
+            angle_with_units = self._geometry_engine._add_angle_units(angle)
+            theta_0 = angle_with_units.type.theteq
+            theta_k = angle_with_units.type.k
+            angle_integral, err = quadrature(angle_q, 0*unit.radians, np.pi*unit.radians, args=(theta_0, theta_k), vec_func=False)
+            logZ += np.log(angle_integral)
+
+        for torsion in structure.dihedrals:
+            torsion_with_units = self._geometry_engine._add_torsion_units(torsion)
+            n = torsion_with_units.type.per
+            torsion_k = torsion_with_units.type.phi_k
+            gamma = torsion_with_units.type.phase
+            torsion_integral, err = quadrature(torsion_q, 0*unit.radians, 2.0*np.pi*unit.radians, args=(n, torsion_k, gamma), vec_func=False)
+            logZ += np.log(torsion_integral)
+
+        return logZ
 
     def _find_angle_of_interest(self, structure, angle_element_target):
         """
@@ -2182,7 +2228,6 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         return context, structure
 
-
     def _get_torsion_log_normalizing_constant(self, torsion, positions, context):
         """
         Get the normalizing constant of the torsion probability distribution
@@ -2282,6 +2327,9 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
         return logZ_theta
 
+    @property
+    def normalizing_constants(self):
+        return self._normalizing_constants
 
 
 class NullTestSystem(PersesTestSystem):
