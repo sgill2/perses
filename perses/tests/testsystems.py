@@ -2224,7 +2224,9 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
     def _get_bond_log_normalizing_constant(self, bond_with_units):
         """
-        Calculate the log normalizing constant for the bond distribution analytically
+        Calculate the log normalizing constant for the bond distribution analytically.
+        Although the bond is not technically a normal (since its length cannot be negative),
+        the assumption here is that the probability mass in the area with r < 0 is negligible.
 
         Parameters
         ----------
@@ -2257,10 +2259,17 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         logZ_theta : float
         """
         import simtk.unit as units
+        from math import erf
 
         angle_k = angle_with_units.type.k
         sigma_theta = units.sqrt(1/(self.beta*angle_k))
-        logZ_theta = np.log((np.sqrt(2*np.pi)*(sigma_theta.value_in_unit(units.radians))))
+        normal_cdf = lambda theta: 0.5*(1.0+erf((theta-angle_with_units.type.theteq) / (sigma_theta*np.sqrt(2))))
+
+        #calculate the definite integral of p(theta) on its domain from [0,pi)
+        logZ_theta = np.log(normal_cdf(-np.pi*units.radians) - normal_cdf(0*units.radians))
+
+        #This logZ value is derived from the normal distribution, which has unbounded support (unlike theta)
+        #logZ_theta = np.log((np.sqrt(2*np.pi)*(sigma_theta.value_in_unit(units.radians))))
 
         return logZ_theta
 
