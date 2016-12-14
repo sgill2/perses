@@ -2057,18 +2057,29 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
     def _find_torsion_of_interest(self, structure, torsion_element_target):
         """
-        Find the torsion of interest for a given set of elements (in
+        Find the torsion of interest for a given set of elements (in order)
 
         Parameters
         ----------
         structure : parmed.Structure object
-
-        torsion_element_target
+             The structure containing the torsion of interest
+        torsion_element_target : list of int
+             List of atomic numbers of the elements of the torsion (in order)
 
         Returns
         -------
-
+        torsion_of_interest : parmed.Dihedral
+            The torsion of interest
         """
+        for torsion in structure.dihedrals:
+            torsion_elements = [torsion.atom1.element, torsion.atom2.element, torsion.atom3.element, torsion.atom4.element]
+            if torsion_elements == torsion_element_target:
+                torsion_of_interest = torsion
+
+        if torsion_of_interest is None:
+            raise ValueError("There were no torsions meeting the specified criteria")
+
+        return torsion_of_interest
 
     def _find_angle_of_interest(self, structure, angle_element_target):
         """
@@ -2219,8 +2230,6 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
             Z += dphi*q[idx]
 
         return np.log(Z)
-
-
 
     def _get_bond_log_normalizing_constant(self, bond_with_units):
         """
