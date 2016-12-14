@@ -2043,15 +2043,15 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
             r_0 = bond_with_units.type.req.value_in_unit(unit.nanometers)
             r_k = bond_with_units.type.k.value_in_unit(unit.kilojoule/(unit.nanometer**2*unit.mole))
             bond_q = lambda r: np.exp(-beta*(r_k/2)*(r-r_0)**2)
-            bond_integral, err = integrate.quad(bond_q, 0, 5)
+            bond_integral, err = integrate.quad(bond_q, 0, np.inf)
             logZ += np.log(bond_integral)
 
         for angle in structure.angles:
             angle_with_units = self._geometry_engine._add_angle_units(angle)
             theta_0 = angle_with_units.type.theteq.value_in_unit(unit.radians)
             theta_k = angle_with_units.type.k.value_in_unit(unit.kilojoule/(unit.radian**2*unit.mole))
-            angle_q = lambda theta: np.exp(-beta*(theta_k/2)*(theta-theta0)**2)
-            angle_integral, err = integrate.quad(angle_q, 0, np.pi, args=(theta_0, theta_k))
+            angle_q = lambda theta: np.exp(-beta*(theta_k/2)*(theta-theta_0)**2)
+            angle_integral, err = integrate.quad(angle_q, 0, np.pi)
             logZ += np.log(angle_integral)
 
         for torsion in structure.dihedrals:
@@ -2060,7 +2060,7 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
             torsion_k = torsion_with_units.type.phi_k.value_in_unit(unit.kilojoule_per_mole)
             gamma = torsion_with_units.type.phase.value_in_unit(unit.radian)
             torsion_q = lambda phi: np.exp(-beta*(torsion_k/2.0)*(1+np.cos(n*phi-gamma)))
-            torsion_integral, err = integrate.quad(torsion_q, 0, 2.0, args=(n, torsion_k, gamma))
+            torsion_integral, err = integrate.quad(torsion_q, 0, 2.0)
             logZ += np.log(torsion_integral)
 
         return logZ
