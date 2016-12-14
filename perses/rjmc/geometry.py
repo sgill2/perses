@@ -770,6 +770,8 @@ class FFAllAngleGeometryEngine(GeometryEngine):
         q = np.exp(logq)
         Z = np.sum(q)
         logp_torsions = logq - np.log(Z)
+        torsion_identifier = "%d-%d-%d-%d" % (torsion.atom1.element, torsion.atom2.element, torsion.atom3.element, torsion.atom4.element)
+        self._metadata[torsion_identifier] = np.log(Z)
         return logp_torsions, phis
 
     def _torsion_log_unnormalized_probability_mass_function(self, growth_context, torsion, positions, r, theta, beta, n_divisions=360):
