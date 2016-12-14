@@ -2002,7 +2002,7 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
 
     Properties
     ----------
-    normalizing_constants : dict of {str:float}
+    log_normalizing_constants : dict of {str:float}
         the normalizing constant for each molecule
     """
     _initial_molecules = ['SS','SSS','SSSS']
@@ -2012,11 +2012,11 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         super(TractableValenceSmallMoleculeTestSystem, self).__init__(**kwargs)
         self._geometry_engine = geometry.FFAllAngleGeometryEngine()
         self.beta = self.thermodynamic_states['vacuum'].beta
-        self._normalizing_constants = {}
+        self._log_normalizing_constants = {}
 
         for molecule in self._initial_molecules:
             _, structure = self._get_context_and_structure(molecule)
-            self._normalizing_constants[molecule] = self._get_log_normalizing_constant(structure)
+            self._log_normalizing_constants[molecule] = self._get_log_normalizing_constant(structure)
 
     def _get_log_normalizing_constant(self, structure):
         """
@@ -2103,8 +2103,8 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
         return context, structure
 
     @property
-    def normalizing_constants(self):
-        return self._normalizing_constants
+    def log_normalizing_constants(self):
+        return self._log_normalizing_constants
 
 
 class NullTestSystem(PersesTestSystem):
