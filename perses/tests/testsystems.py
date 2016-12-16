@@ -2018,6 +2018,12 @@ class TractableValenceSmallMoleculeTestSystem(ValenceSmallMoleculeLibraryTestSys
             _, structure = self._get_context_and_structure(molecule)
             self._log_normalizing_constants[molecule] = self._get_log_normalizing_constant(structure)
 
+        #self.exen_samplers['vacuum'].log_weights['SS'] = 0.0
+
+        #for state_key, log_weight in self._log_normalizing_constants.items():
+        #    if state_key != 'SS':
+        #        self.exen_samplers['vacuum'].log_weights[state_key] = -(log_weight - self._log_normalizing_constants['SS'])
+
     def _get_log_normalizing_constant(self, structure):
         """
         Get the log normalizing constant of this tractable system using numerical quadrature
@@ -2598,6 +2604,19 @@ def run_valence_system():
     testsystem.mcmc_samplers[environment].nsteps = 1
     testsystem.sams_samplers[environment].run(niterations=50)
 
+def run_tractable_system():
+    """
+    Run the tractable test system with only vacuum and the exen sampler
+    """
+    testsystem = TractableValenceSmallMoleculeTestSystem(storage_filename='tractable_output_10k_fixedsamsmaybe.nc')
+    environment = 'vacuum'
+    testsystem.exen_samplers[environment].pdbfile = open('tractable.pdb','w')
+    testsystem.exen_samplers[environment].ncmc_engine.nsteps = 0
+    testsystem.mcmc_samplers[environment].nsteps = 5
+    testsystem.sams_samplers[environment].run(niterations=10000)
+
+
+
 def run_alanine_system(sterics=False):
     """
     Run alanine dipeptide in vacuum test system.
@@ -2734,10 +2753,6 @@ def run_imidazole():
     # Run ligand in solvent constant-pH sampler calibration
     testsystem.sams_samplers['explicit-imidazole'].verbose=True
     testsystem.sams_samplers['explicit-imidazole'].run(niterations=100)
-
-def run_tractable_system():
-    v = TractableValenceSmallMoleculeTestSystem()
-    print(v.log_normalizing_constants)
 
 def run_fused_rings():
     """
