@@ -1836,6 +1836,7 @@ class PredHBond(oechem.OEUnaryBondPred):
             return False
 
 
+
 class ProposalOrderTools(object):
     """
     This is an internal utility class for determining the order of atomic position proposals.
@@ -1929,7 +1930,6 @@ class ProposalOrderTools(object):
         logp_torsion_choice += add_atoms(new_hydrogen_atoms, atoms_torsions)
 
         return atoms_torsions, logp_torsion_choice
-
 
     def _atoms_eligible_for_proposal(self, new_atoms, atoms_with_positions):
         """
@@ -2025,6 +2025,43 @@ class ProposalOrderTools(object):
         topological_torsions = [ parmed.Dihedral(atoms[0], atoms[1], atoms[2], atoms[3]) for atoms in topological_torsions ]
         return topological_torsions
 
+class OEProposalOrderTools(ProposalOrderTools):
+    """
+    This is an internal utility class for deciding the proposal order of new atoms in the reversible jump scheme.
+    It uses OpenEye to generate a list of torsions, and then generates a pandas dataframe which is used to determine the
+    ultimate proposal order
+    """
+
+    def determine_proposal_order(self, direction='forward'):
+        """
+        This is the main public method which will give proposal order for either forward or reverse proposals. It assumes
+        that only one residue is changing.
+
+        Parameters
+        ----------
+        direction : str, optional
+            The direction of the transformation. Default forward.
+
+        Returns
+        -------
+        atoms_torsions : ordereddict
+            parmed.Atom : parmed.Dihedral
+        logp_torsion_choice : float
+            log probability of the chosen torsions
+        """
+        #First get what is necessary for continuing based on the direction
+        #NOTE: where "atoms" are used, we have indices.
+        if direction == 'forward':
+            atoms = list(self._topology_proposal.new_topology.atoms())
+            residue = atoms[self._topology_proposal.unique_new_atoms[0]].residue
+            atoms_with_positions = list(self._topology_proposal.new_to_old_atom_map.keys())
+        elif direction == 'reverse':
+            atoms = list(self._topology_proposal.old_topology.atoms())
+            residue = atoms[self._topology_proposal.unique_old_atoms[0]].residue
+            atoms_with_positions = list(self._topology_proposal.new_to_old_atom_map.values())
+        else:
+            raise ValueError("You can only specify forward or reverse for the direction.")
+        oemol = FFAllAngleGeometryEngine._oemol_from_residue(residue)
 
 class NoTorsionError(Exception):
     def __init__(self, message):
