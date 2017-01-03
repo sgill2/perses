@@ -1888,15 +1888,8 @@ class ProposalOrderTools(object):
             raise ValueError("direction parameter must be either forward or reverse.")
 
         # Determine list of atoms to be added.
-        new_hydrogen_atoms = [ structure.atoms[idx] for idx in unique_atoms if structure.atoms[idx].atomic_number == 1 ]
-        new_heavy_atoms    = [ structure.atoms[idx] for idx in unique_atoms if structure.atoms[idx].atomic_number != 1 ]
-
-        # DEBUG
-        #print('STRUCTURE')
-        #print(structure)
-        #for atom in structure.atoms:
-        #    print(atom, atom.bonds, atom.angles, atom.dihedrals)
-        #print('')
+        new_hydrogen_atoms = [structure.atoms[idx] for idx in unique_atoms if structure.atoms[idx].atomic_number == 1]
+        new_heavy_atoms = [structure.atoms[idx] for idx in unique_atoms if structure.atoms[idx].atomic_number != 1]
 
         def add_atoms(new_atoms, atoms_torsions):
             """
