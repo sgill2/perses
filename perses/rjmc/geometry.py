@@ -14,6 +14,7 @@ import openeye.oechem as oechem
 import openeye.oeomega as oeomega
 import simtk.openmm.app as app
 import time
+import pandas as pd
 
 class GeometryEngine(object):
     """
@@ -2062,7 +2063,31 @@ class OEProposalOrderTools(ProposalOrderTools):
         else:
             raise ValueError("You can only specify forward or reverse for the direction.")
         oemol = FFAllAngleGeometryEngine._oemol_from_residue(residue)
-        
+
+    def _torsions_to_dataframe(self, oemol):
+        """
+        This creates a pandas dataframe from the torsions in the OEMol, using the original topology indices for each
+        atom. The dataframe will have columns of atom1, atom2, atom3, atom4, and the rows will be torsions.
+
+        Parameters
+        ----------
+        oemol : openeye.oechem.OEMol
+            The OEMol representation of the residue that is changing. The atoms in this oemol MUST have the "topology_index"
+            data set to the index of that atom in the original topology.
+
+        Returns
+        -------
+        torsion_df : pandas.DataFrame
+            A dataframe with columns representing atoms in a torsion, and rows representing torsions. The atom indices
+            are from the original topology.
+        """
+        oetorsions = list(oechem.OEGetTorsions(oemol))
+        torsion_array = np.zeros([len(oetorsions), 4])
+        for index, torsion in enumerate(torsion_array):
+            torsion_array[index, :] = [torsion.a.GetData("topology_index"), torsion.b.GetData("topology_index"), torsion.c.GetData("topology_index"), torsion.d.GetData("topology_index")]
+        torsion_df = pd.DataFrame(torsion_array, columns=['atom1', 'atom2', 'atom3', 'atom4'])
+        return torsion_df
+
 
 class NoTorsionError(Exception):
     def __init__(self, message):
