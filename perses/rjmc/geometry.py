@@ -2062,6 +2062,7 @@ class OEProposalOrderTools(ProposalOrderTools):
         else:
             raise ValueError("You can only specify forward or reverse for the direction.")
         oemol = FFAllAngleGeometryEngine._oemol_from_residue(residue)
+        
 
 class NoTorsionError(Exception):
     def __init__(self, message):
